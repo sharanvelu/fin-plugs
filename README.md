@@ -101,5 +101,3 @@ See [AGENTS.md](AGENTS.md) for the step-by-step guide and
 contract with `env_spec()`, return `ContainerSpec`s from `primary_spec()` /
 `asset_specs()`, and delegate command handlers to `ctx.exec(...)`. Describe,
 never act.
-
-This is for a sample commit for testing the CI
