@@ -14,12 +14,12 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Plugs run under fincli; the tests import it. The tool is public, so a
       # plain checkout works — no token needed.
       - name: Check out fincli
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: sharanvelu/fin
           path: fin-cli
@@ -44,10 +44,10 @@ jobs:
     name: plug contracts
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Check out fincli
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: sharanvelu/fin
           path: fin-cli
@@ -68,7 +68,7 @@ jobs:
     name: lint (ruff)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: astral-sh/ruff-action@v3
         with:
