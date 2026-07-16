@@ -1,7 +1,9 @@
 # fin-plugs
 
-> The plug library for [Fin](../fin-v2) — declarative container recipes for
-> local development.
+[![CI](https://github.com/sharanvelu/fin-plugs/actions/workflows/ci.yml/badge.svg)](https://github.com/sharanvelu/fin-plugs/actions/workflows/ci.yml)
+
+> The plug library for [Fin](https://github.com/sharanvelu/fin) — declarative
+> container recipes for local development.
 
 This repository holds the **plugs** that Fin (`fincli`) loads at runtime. It is
 deliberately separate from the tool: `fincli` ships as a compiled binary, while

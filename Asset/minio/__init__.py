@@ -6,7 +6,6 @@ Fin's system config (``Config.ASSET_*``).
 """
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 from fincli.config import Config

@@ -104,6 +104,13 @@ To smoke-test against the actual tool (with the symlink in place):
 python3 -m fincli plugs list          # all six plugs should show as loaded
 ```
 
+CI (`.github/workflows/ci.yml`) runs on every push/PR: the suite across Python
+3.11–3.13 (checking out the public `sharanvelu/fin` repo for `fincli`), a
+`ruff check` lint job, and a dedicated **plug contracts** job
+(`tests/test_plug_contracts.py`) enforcing the fincli/stdlib-only import rule,
+the declarative no-Docker rule, and loader discovery for every plug. Run those
+contract checks locally with `python3 -m pytest tests/test_plug_contracts.py`.
+
 ## Gotchas
 
 - **The loader imports by file path, not module name.** Each plug becomes

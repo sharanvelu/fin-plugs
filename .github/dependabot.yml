@@ -1,0 +1,9 @@
+# Keep the pinned GitHub Actions in ci.yml up to date. This repo has no Python
+# dependencies of its own (plugs import only fincli + stdlib), so the actions
+# ecosystem is the only one that applies.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
