@@ -16,23 +16,34 @@ no packaging, no dependencies, and nothing to build.
 ## Project layout
 
 ```
-App/                      primary application runtimes (PlugType.APP)
-  laravel/__init__.py     LaravelPlug — PHP image, artisan/composer/tinker/… commands
-  django/__init__.py      DjangoPlug — python-slim + runserver, manage/migrate/shell/… commands
-Asset/                    shared fixed-name services (PlugType.ASSET)
-  mysql/__init__.py       MySQLPlug    — fin_mysql, mysql:8.0
-  postgres/__init__.py    PostgresPlug — fin_postgres, postgres:16-alpine
-  redis/__init__.py       RedisPlug    — fin_redis, redis:7-alpine
-  minio/__init__.py       MinioPlug    — fin_minio, quay.io/minio/minio
-Global/                   project-independent plugs (empty; .gitkeep only)
+plugs/                    every plug — ONE lowercase file per plug
+  laravel.py              LaravelPlug (APP) — PHP image, artisan/composer/tinker/… commands
+  django.py               DjangoPlug (APP) — python-slim + runserver, manage/migrate/shell/… commands
+  mysql.py                MySQLPlug (ASSET)    — fin_mysql, mysql:8.0
+  postgres.py             PostgresPlug (ASSET) — fin_postgres, postgres:16-alpine
+  redis.py                RedisPlug (ASSET)    — fin_redis, redis:7-alpine
+  minio.py                MinioPlug (ASSET)    — fin_minio, quay.io/minio/minio
+catalog.json              machine-readable index (CI-generated; NEVER hand-edit)
+scripts/build_catalog.py  regenerates catalog.json; --check validates it
 tests/
   conftest.py             hermetic fixtures (isolate ~/.fin, fake docker objects)
   test_bundled_plugs.py   loads the REAL plugs above and checks their contracts
+  test_plug_contracts.py  repo-wide invariants (imports, identity, one class/file)
+  test_catalog.py         committed catalog.json matches the plugs on disk
 ```
 
+The filename **is** the plug name: `fin plugs install <name>` fetches
+`https://raw.githubusercontent.com/sharanvelu/fin-plugs/master/plugs/<name>.py`,
+so renaming or moving a file under `plugs/` breaks installs — filenames are
+public API. A plug's type (APP/ASSET/GLOBAL) is declared in-class via
+`plug_type`; the layout carries no type information.
+
 At runtime plugs load from `Config.PLUGS_DIR`, fixed at `~/.fin/plugs` (moves
-with `FIN_DATA_DIR`) — see `fin-v2/fincli/config.py`. For development, symlink
-this repo there once: `ln -s "$PWD" ~/.fin/plugs`.
+with `FIN_DATA_DIR`) — see `fin-v2/fincli/config.py`. **Transitional:** the
+released `fincli` still discovers only the old `App/Asset/Global` tree, so
+there is currently no working dev symlink; plugs here are exercised via the
+test suite until fin-v2 ships flat-layout support (the symlink then becomes
+`ln -s "$PWD/plugs" ~/.fin/plugs`).
 
 ## Conventions (do not violate)
 
@@ -45,10 +56,11 @@ this repo there once: `ln -s "$PWD" ~/.fin/plugs`.
   `docker`, never call `run_container`, never `subprocess` the docker CLI. The
   only way a plug executes anything is `ctx.exec(...)` (`PlugContext`), which
   runs inside the project's primary container via Fin's audited Docker path.
-- **One `FinPlug` subclass per package.** The loader imports each plug package
-  by file path and picks the single class subclassing `FinPlug` that is
-  *defined in that module* (imported classes are ignored). Set `name`,
-  `version`, `plug_type`, `description`.
+- **One `FinPlug` subclass per file, filename == declared `name`.** The loader
+  imports each `plugs/<name>.py` by file path and picks the single class
+  subclassing `FinPlug` that is *defined in that module* (imported classes are
+  ignored). Set `name` (lowercase, equal to the filename — it becomes the
+  install URL), `version`, `plug_type`, `description`.
 - **Terminal output goes through `fincli.ui.console`** (`error`, `warning`, …).
   Never call bare `print()` in a plug. Import it locally inside the handler
   (see `_make` in the laravel plug) to keep module import light.
@@ -60,8 +72,8 @@ this repo there once: `ln -s "$PWD" ~/.fin/plugs`.
 
 ## How to add a plug
 
-1. Create `{App|Asset|Global}/<name>/__init__.py` with one class subclassing
-   `FinPlug` (`name`, `version`, `plug_type`, `description`).
+1. Create `plugs/<name>.py` (lowercase) with one class subclassing `FinPlug`
+   (`name` — must equal the filename, `version`, `plug_type`, `description`).
 2. APP plugs implement `primary_spec(env) -> ContainerSpec` (set `service="web"`,
    `web_exposed`/`web_port` for Traefik routing, `workdir_mount` for the project
    bind mount). ASSET plugs implement `asset_specs(env) -> list[ContainerSpec]`
@@ -78,9 +90,11 @@ this repo there once: `ln -s "$PWD" ~/.fin/plugs`.
    the `ContainerSpec` (Debian defaults; override `cert_dir`/`cert_update_cmd`
    for other bases — RHEL: `/etc/pki/ca-trust/source/anchors` +
    `["update-ca-trust", "extract"]`).
-6. Add tests in `tests/test_bundled_plugs.py` (load via `load_by_name`, assert
-   the env spec, the container spec fields, and each handler's `ctx.exec`
-   delegation with the `FakeCtx` recorder) and run the suite.
+6. Add tests in `tests/test_bundled_plugs.py` (load via its `load_plug` helper,
+   assert the env spec, the container spec fields, and each handler's
+   `ctx.exec` delegation with the `FakeCtx` recorder) and run the suite.
+7. Regenerate the catalog: `python3 scripts/build_catalog.py` and commit
+   `catalog.json` with the plug — CI rejects PRs where it drifts.
 
 ## Running tests
 
@@ -92,38 +106,36 @@ python3 -m pytest                     # full suite
 python3 -m pytest -k django           # focused run
 ```
 
-The suite loads the **real** plugs in this repo (`Config.PLUGS_DIR` is pointed
-at the repo root) but is otherwise hermetic: an autouse fixture re-points
-`Config.DATA_DIR`/`CONFIG_FILE`/`REGISTRY_DB` at a per-test tmp dir and another
-clears the `DockerService` singleton, so no test can touch a real Docker daemon
-or the developer's `~/.fin`.
-
-To smoke-test against the actual tool (with the symlink in place):
-
-```bash
-python3 -m fincli plugs list          # all six plugs should show as loaded
-```
+The suite loads the **real** plugs in this repo (each `plugs/<name>.py` loaded
+directly through the loader's single-file path — released fincli's *discovery*
+doesn't know the flat layout yet) but is otherwise hermetic: an autouse fixture
+re-points `Config.DATA_DIR`/`CONFIG_FILE`/`REGISTRY_DB` at a per-test tmp dir
+and another clears the `DockerService` singleton, so no test can touch a real
+Docker daemon or the developer's `~/.fin`.
 
 CI (`.github/workflows/ci.yml`) runs on every push/PR: the suite across Python
 3.11–3.13 (checking out the public `sharanvelu/fin` repo for `fincli`), a
-`ruff check` lint job, and a dedicated **plug contracts** job
+`ruff check` lint job, a dedicated **plug contracts** job
 (`tests/test_plug_contracts.py`) enforcing the fincli/stdlib-only import rule,
-the declarative no-Docker rule, and loader discovery for every plug. Run those
-contract checks locally with `python3 -m pytest tests/test_plug_contracts.py`.
+the declarative no-Docker rule, and the filename==name identity rule for every
+plug, and a **catalog** job: PRs run `scripts/build_catalog.py --check` (stale
+`catalog.json` fails the build); pushes to `master` regenerate the catalog and
+auto-commit it (`[skip ci]` guards against loops). Run the contract checks
+locally with `python3 -m pytest tests/test_plug_contracts.py`.
 
 ## Gotchas
 
-- **The loader imports by file path, not module name.** Each plug becomes
-  module `fin_plug_<TypeDir>_<name>`; relative imports beyond the plug package
-  won't resolve. Directories starting with `.` or `_` are skipped (which is why
+- **The loader imports by file path, not module name.** Each plug becomes a
+  synthetic `fin_plug_*` module; imports of anything but `fincli.*`/stdlib
+  won't resolve. Entries starting with `.` or `_` are skipped (which is why
   stray `__pycache__/` dirs are harmless).
 - **A broken plug is silently-ish skipped.** Import errors, a missing `FinPlug`
   subclass, or a failing `setup()` log a warning and the plug is dropped — a
   "missing" plug in `fin plugs list` usually means an import error, not a
   discovery problem. A third-party import is the classic cause.
-- **Directory name vs `name` attribute.** `load_by_name` matches the package
-  directory first, then falls back to scanning declared `.name` attributes.
-  Keep them identical to avoid confusion.
+- **Filename vs `name` attribute.** They MUST be identical (lowercase) — the
+  filename is the install URL and the contract tests enforce the match. The
+  declared `plug_type` is the plug's type; nothing about the path implies it.
 - **`Config` paths are resolved at import time.** Tests must
   `monkeypatch.setattr(Config, "PLUGS_DIR", ...)` — setting `FIN_DATA_DIR`
   after `fincli.config` is imported has no effect.
