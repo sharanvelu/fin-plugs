@@ -155,7 +155,7 @@ and the style checks with `ruff check plugs scripts tests` +
 - **Don't forward Fin control vars into app containers.** See the django plug's
   `_FIN_CONTROL_VARS` strip — an explicit list of the plug's own steering
   variables, **not** a blanket `FIN_*` prefix filter: any `FIN_*` var not on
-  the list (`FIN_PHP_VERSION`, `FIN_ASSET_SITE`, …) is forwarded with the rest
+  the list (`FIN_PHP_VERSION`, `FIN_COMPOSER_VERSION`, …) is forwarded with the rest
   of the project env, and django deliberately re-adds `FIN_APT_PACKAGES`
   because its startup command expands `${FIN_APT_PACKAGES}`. When you add a
   steering var to a plug, add it to that plug's strip list.

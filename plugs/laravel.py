@@ -55,6 +55,14 @@ class LaravelPlug(FinPlug):
                     default="2",
                     description="Composer major version",
                 ),
+                EnvVar(
+                    "FIN_DOCKER_IMAGE",
+                    required=False,
+                    description=(
+                        "Override the container image (advanced; default "
+                        "sharanvelu/laravel-php:<FIN_PHP_VERSION>)"
+                    ),
+                ),
             ]
         )
 

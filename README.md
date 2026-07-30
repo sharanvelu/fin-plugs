@@ -126,8 +126,8 @@ belongs *inside the container* the plug describes, not in the plug itself.
 
 | Plug | Type | Summary |
 | ---- | ---- | ------- |
-| `laravel` | APP | Laravel/PHP runtime (`sharanvelu/laravel-php`, web on 80) with the full artisan/composer/tinker/migrate/queue command set; bind-mounts the host's `~/.composer` to `/root/.composer` so the composer cache is shared across projects; installs `~/.fin/certs` into the container (`install_certs=True`). |
-| `django` | APP | Django on `python:<ver>-slim`; installs `requirements.txt` on start (warm shared pip cache), runs `manage.py runserver` with live autoreload; contributes manage/migrate/shell/createsuperuser/… commands. |
+| `laravel` | APP | Laravel/PHP runtime (`sharanvelu/laravel-php`, web on 80; image overridable via `FIN_DOCKER_IMAGE`) with the full artisan/composer/tinker/migrate/queue command set; bind-mounts the host's `~/.composer` to `/root/.composer` so the composer cache is shared across projects; installs `~/.fin/certs` into the container (`install_certs=True`). |
+| `django` | APP | Django on `python:<ver>-slim` (image overridable via `FIN_DOCKER_IMAGE`); installs `requirements.txt` on start (warm shared pip cache), runs `manage.py runserver` with live autoreload; contributes manage/migrate/shell/createsuperuser/… commands. |
 | `mysql` | ASSET | Shared MySQL 8.0 at `fin_mysql:3306`, credentials `fin`/`password`, persistent `fin_asset_mysql` volume. |
 | `postgres` | ASSET | Shared PostgreSQL 16 (alpine) at `fin_postgres:5432`, credentials `fin`/`password`, persistent `fin_asset_postgres` volume. |
 | `redis` | ASSET | Shared Redis 7 (alpine) at `fin_redis:6379`, persistent `fin_asset_redis` volume. |
