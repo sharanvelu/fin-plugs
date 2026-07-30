@@ -1,0 +1,80 @@
+# Catalog freshness for every PR: a PR that touches plugs without a
+# regenerated catalog.json must fail. Developers fix locally with
+# `python3 scripts/build_catalog.py` and commit the result.
+#
+# The push-to-master publishing side lives in catalog-release.yml.
+#
+# Required status check: "Catalog Gate" (only the gate — the check job is
+# path-filtered and may legitimately be skipped).
+
+name: catalog
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: catalog-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      catalog: ${{ steps.filter.outputs.catalog || 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Filter changed paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        with:
+          filters: |
+            catalog:
+              - 'plugs/**'
+              - 'scripts/**'
+              - 'catalog.json'
+              - '.github/workflows/catalog.yml'
+              - '.github/actions/setup/**'
+
+  check:
+    name: catalog is current
+    needs: changes
+    if: needs.changes.outputs.catalog == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Check catalog.json matches plugs/
+        run: python scripts/build_catalog.py --check
+
+  gate:
+    name: Catalog Gate
+    needs: [changes, check]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any needed job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - name: All good
+        run: echo "All jobs succeeded or were skipped as not relevant."

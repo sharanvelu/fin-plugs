@@ -1,7 +1,13 @@
-# Lint config for CI (astral-sh/ruff-action) and local runs.
-# The repo predates ruff enabling isort (I) by default; imports here are
-# deliberately one-per-line, so codify that instead of churning every file.
+# Lint config for CI (the Code Style Gate) and local runs. The ruff version
+# itself comes from fincli's dev extra, so the two repos can never disagree.
+
+[lint]
+# Explicit selection so the gate never depends on ruff's floating defaults
+# (which changed in 0.16): the classic pyflakes + pycodestyle-errors set,
+# plus isort. Extend deliberately, in a PR that fixes what it introduces.
+select = ["E4", "E7", "E9", "F", "I"]
 
 [lint.isort]
+# Imports here are deliberately one-per-line; codify the repo's style.
 force-single-line = true
 known-first-party = ["fincli"]

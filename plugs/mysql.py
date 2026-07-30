@@ -4,6 +4,7 @@ One MySQL container shared across every Fin project (fixed name ``fin_mysql``),
 so multiple projects can use the same database server. Credentials come from
 Fin's system config (``Config.ASSET_*``).
 """
+
 from __future__ import annotations
 
 from fincli.config import Config
@@ -32,12 +33,9 @@ class MySQLPlug(FinPlug):
                     "MYSQL_PASSWORD": Config.ASSET_PASSWORD,
                     "MYSQL_DATABASE": Config.ASSET_DEFAULT_DATABASE,
                 },
-                ports=[
-                    PortMapping(
-                        container=3306,
-                        host=3306)],
+                ports=[PortMapping(container=3306, host=3306)],
                 volumes=[
-                    VolumeMount(
-                        host="fin_asset_mysql",
-                        container="/var/lib/mysql")],
-            )]
+                    VolumeMount(host="fin_asset_mysql", container="/var/lib/mysql")
+                ],
+            )
+        ]

@@ -1,0 +1,86 @@
+# Static analysis for every PR.
+#
+# Required status check: "Static Analysis Gate" (only the gate — the work job
+# is path-filtered and may legitimately be skipped).
+#
+#   workflows  runs ONLY when .github/** changes: actionlint (syntax/shell
+#              mistakes) + zizmor (workflow security audit).
+#
+# Unlike the fin repo there is no mypy job: this repo has no mypy config of
+# its own — plugs are typed against fincli's API and checked by the tool
+# repo's own static analysis.
+
+name: static analysis
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: static-analyze-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      workflows: ${{ steps.filter.outputs.workflows || 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Filter changed paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        with:
+          filters: |
+            workflows:
+              - '.github/**'
+
+  workflows:
+    name: workflow lint + audit
+    needs: changes
+    if: needs.changes.outputs.workflows == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+        with:
+          fail-on-error: true
+
+      # advanced-security: false = report findings in the job log and fail the
+      # job, instead of uploading SARIF (which would need GHAS + extra perms).
+      - name: zizmor security audit
+        uses: zizmorcore/zizmor-action@6fc4b006235f201fdab3722e17240ab420d580e5 # v0.6.1
+        with:
+          advanced-security: false
+
+  gate:
+    name: Static Analysis Gate
+    needs: [changes, workflows]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any needed job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - name: All good
+        run: echo "All jobs succeeded or were skipped as not relevant."

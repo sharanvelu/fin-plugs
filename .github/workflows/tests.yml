@@ -1,0 +1,163 @@
+# Test suite for every PR.
+#
+# Required status check: "Tests Gate" (make ONLY the gate required — the work
+# jobs are path-filtered and may legitimately be skipped, which would wedge a
+# PR if they were required directly).
+#
+# Layout ("changes → work → gate"):
+#   changes   detects whether plug/test/script code changed (forced true on
+#             dispatch)
+#   tests     the full hermetic suite across supported Pythons (loads the real
+#             plugs through the real fincli loader; never touches Docker)
+#   contract  tests/test_plug_contracts.py as its own named job so a contract
+#             violation (third-party import, docker use, filename != name)
+#             stays legible at a glance on the PR
+#   smoke     proves the plugs load through the REAL tool exactly as installed
+#             (fin plugs list against a temp FIN_DATA_DIR)
+#   gate      always runs; fails iff a needed job failed or was cancelled
+
+name: tests
+
+on:
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: tests-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ steps.filter.outputs.code || 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # On workflow_dispatch there is no PR diff — the step is skipped and the
+      # `|| 'true'` fallback above forces every domain on.
+      - name: Filter changed paths
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        with:
+          filters: |
+            code:
+              - 'plugs/**'
+              - 'tests/**'
+              - 'scripts/**'
+              - 'pytest.ini'
+              - '.github/workflows/tests.yml'
+              - '.github/actions/setup/**'
+
+  tests:
+    name: tests (py${{ matrix.python }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Run tests
+        run: python -m pytest
+
+  contract:
+    name: plug contracts
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      - name: Check plug contracts
+        run: python -m pytest tests/test_plug_contracts.py -v
+
+  smoke:
+    name: plugs load through the real tool
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/setup
+
+      # Production parity the unit suite can't give: `fin plugs list` walking
+      # a real PLUGS_DIR and importing every plug exactly as installed.
+      #
+      # TRANSITIONAL dual placement: released fincli discovers plugs only
+      # under App/Asset/Global type dirs (it ignores files at the PLUGS_DIR
+      # root), while the upcoming flat-layout loader scans ONLY the root.
+      # Copying to both means each fincli generation finds every plug exactly
+      # once. Collapse to the flat copy alone when fin master ships the flat
+      # loader.
+      - name: fin plugs list loads every plug
+        run: |
+          FIN_DATA_DIR="$(mktemp -d)"
+          export FIN_DATA_DIR
+          mkdir -p "$FIN_DATA_DIR/plugs/App"
+          cp plugs/*.py "$FIN_DATA_DIR/plugs/"
+          cp plugs/*.py "$FIN_DATA_DIR/plugs/App/"
+
+          out="$(python -m fincli plugs list)"
+          echo "$out"
+
+          # `fin plugs list` exits 0 even when nothing loads — verify every
+          # plug in the repo appears in the listing with Status "loaded".
+          fail=0
+          for f in plugs/*.py; do
+            name="$(basename "$f" .py)"
+            if ! echo "$out" | grep -E "\b${name}\b.*\bloaded\b" >/dev/null; then
+              echo "::error::plug '$name' is missing from 'fin plugs list' or not loaded"
+              fail=1
+            fi
+          done
+          exit "$fail"
+
+  gate:
+    name: Tests Gate
+    needs: [changes, tests, contract, smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Fail if any needed job failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
+      - name: All good
+        run: echo "All jobs succeeded or were skipped as not relevant."

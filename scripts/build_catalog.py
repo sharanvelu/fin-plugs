@@ -40,6 +40,7 @@ except ImportError:  # released fincli: legacy dir loader with a type argument
         # the declared instance.plug_type.
         return _legacy_load(py.with_suffix(""), PlugType.APP)
 
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGS_DIR = REPO_ROOT / "plugs"
 CATALOG = REPO_ROOT / "catalog.json"
@@ -50,23 +51,28 @@ SCHEMA_VERSION = 1
 #: files from the master branch, no matter which catalog release is read.
 FILES_BASE_URL = "https://raw.githubusercontent.com/sharanvelu/fin-plugs/master"
 
+
 def build_catalog() -> str:
     """Return the catalog JSON document for the plugs currently on disk."""
     entries = []
     for path in sorted(PLUGS_DIR.glob("*.py")):
         lp = _loader_load(path)
         if lp is None:
-            sys.exit(f"error: {path.relative_to(REPO_ROOT)} failed to load — "
-                     "fix the plug (see loader warning above) and rerun")
+            sys.exit(
+                f"error: {path.relative_to(REPO_ROOT)} failed to load — "
+                "fix the plug (see loader warning above) and rerun"
+            )
         inst = lp.instance
-        entries.append({
-            "name": inst.name,
-            "type": inst.plug_type.value,
-            "version": inst.version,
-            "description": inst.description,
-            "commands": sorted(inst.commands()),
-            "file": f"plugs/{path.name}",
-        })
+        entries.append(
+            {
+                "name": inst.name,
+                "type": inst.plug_type.value,
+                "version": inst.version,
+                "description": inst.description,
+                "commands": sorted(inst.commands()),
+                "file": f"plugs/{path.name}",
+            }
+        )
     document = {
         "schema_version": SCHEMA_VERSION,
         "files_base_url": FILES_BASE_URL,
@@ -102,8 +108,10 @@ def main() -> int:
         print("catalog.json already up to date.")
         return 0
     CATALOG.write_text(generated, encoding="utf-8")
-    print(f"wrote {CATALOG.relative_to(REPO_ROOT)} "
-          f"({len(json.loads(generated)['plugs'])} plugs)")
+    print(
+        f"wrote {CATALOG.relative_to(REPO_ROOT)} "
+        f"({len(json.loads(generated)['plugs'])} plugs)"
+    )
     return 0
 
 

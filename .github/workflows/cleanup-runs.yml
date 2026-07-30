@@ -1,0 +1,55 @@
+# Nightly housekeeping: delete cancelled/skipped workflow runs and any run
+# older than 30 days, keeping the Actions tab readable. Guarded by repository
+# owner so forks don't run the cron.
+
+name: cleanup runs
+
+on:
+  schedule:
+    - cron: "43 3 * * *" # nightly, 03:43 UTC (offset from fin's 03:17)
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: cleanup-runs
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: Delete stale workflow runs
+    if: github.event_name != 'schedule' || github.repository_owner == 'sharanvelu'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: write # delete workflow runs
+    steps:
+      - name: Delete cancelled/skipped and >30-day-old runs
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+            const disposable = new Set(['cancelled', 'skipped']);
+            let deleted = 0;
+
+            const runs = await github.paginate(
+              github.rest.actions.listWorkflowRunsForRepo,
+              { owner: context.repo.owner, repo: context.repo.repo, per_page: 100 },
+            );
+
+            for (const run of runs) {
+              if (run.status !== 'completed') continue; // never touch in-flight runs
+              const stale = new Date(run.created_at) < cutoff;
+              if (!stale && !disposable.has(run.conclusion)) continue;
+              try {
+                await github.rest.actions.deleteWorkflowRun({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  run_id: run.id,
+                });
+                deleted++;
+              } catch (e) {
+                core.warning(`Could not delete run ${run.id}: ${e.message}`);
+              }
+            }
+            core.info(`Deleted ${deleted} of ${runs.length} runs.`);

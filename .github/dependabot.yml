@@ -1,9 +1,24 @@
-# Keep the pinned GitHub Actions in ci.yml up to date. This repo has no Python
-# dependencies of its own (plugs import only fincli + stdlib), so the actions
-# ecosystem is the only one that applies.
+# Weekly updates for the pinned GitHub Actions across .github/workflows/ and
+# the shared setup action. Minor + patch bumps are grouped into ONE PR
+# (auto-merged by dependabot-auto-merge.yml once required checks pass); majors
+# arrive individually and stay manual. The "chore(deps)" prefix keeps PR
+# titles passing the Conventional Commits check (pr-title.yml).
+#
+# github-actions is the ONLY ecosystem here: this repo has no Python
+# dependencies of its own (plugs import only fincli + stdlib; the dev
+# toolchain comes from sharanvelu/fin's dev extra).
 version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
+      day: monday
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      actions-minor-and-patch:
+        applies-to: version-updates
+        update-types: [minor, patch]
+    cooldown:
+      default-days: 7

@@ -1,0 +1,37 @@
+# Enable GitHub auto-merge on Dependabot PRs for patch/minor updates only.
+#
+# This only ENABLES auto-merge — GitHub still waits for every required check
+# in the master ruleset before merging, so nothing lands unverified. Major
+# updates stay manual. Squash keeps the "chore(deps): ..." PR title as the
+# commit message. Requires the repo setting "Allow auto-merge".
+
+name: dependabot auto-merge
+
+on:
+  pull_request:
+    branches: [master]
+
+permissions: {}
+
+jobs:
+  auto-merge:
+    name: Enable auto-merge
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write # enable auto-merge
+      pull-requests: write
+    steps:
+      - name: Fetch Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Enable auto-merge for patch/minor updates
+        if: steps.meta.outputs.update-type == 'version-update:semver-patch' || steps.meta.outputs.update-type == 'version-update:semver-minor'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge --auto --squash "$PR_URL"

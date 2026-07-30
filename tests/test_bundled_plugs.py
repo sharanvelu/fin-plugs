@@ -24,6 +24,7 @@ except ImportError:  # released fincli: legacy dir loader with a type argument
         # declared ``instance.plug_type``, never this value.
         return _legacy_load(py.with_suffix(""), PlugType.APP)
 
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 #: Every bundled plug is a single file: plugs/<name>.py.
 PLUGS_DIR = REPO_ROOT / "plugs"
@@ -59,7 +60,9 @@ def test_laravel_env_spec():
 
 def test_laravel_primary_spec(tmp_path):
     lp = load_plug("laravel")
-    spec = lp.instance.primary_spec(_env(tmp_path, FIN_SITE="app.localhost", FIN_PHP_VERSION="8.3"))
+    spec = lp.instance.primary_spec(
+        _env(tmp_path, FIN_SITE="app.localhost", FIN_PHP_VERSION="8.3")
+    )
     assert spec.service == "web"
     assert spec.image == "sharanvelu/laravel-php:8.3"
     assert spec.web_exposed is True
@@ -188,7 +191,12 @@ def test_django_env_spec():
     lp = load_plug("django")
     spec = lp.instance.env_spec()
     names = {v.name for v in spec.variables}
-    assert {"FIN_SITE", "FIN_PYTHON_VERSION", "FIN_DJANGO_PORT", "FIN_REQUIREMENTS"} <= names
+    assert {
+        "FIN_SITE",
+        "FIN_PYTHON_VERSION",
+        "FIN_DJANGO_PORT",
+        "FIN_REQUIREMENTS",
+    } <= names
     site_var = next(v for v in spec.variables if v.name == "FIN_SITE")
     assert site_var.required is True
     py_var = next(v for v in spec.variables if v.name == "FIN_PYTHON_VERSION")
@@ -223,18 +231,29 @@ def test_django_apt_packages_opt_in(tmp_path):
 
     # Opt-in: apt-install runs before pip and the packages reach the container env.
     spec2 = lp.instance.primary_spec(
-        _env(tmp_path, FIN_SITE="x.localhost", FIN_APT_PACKAGES="build-essential libpq-dev")
+        _env(
+            tmp_path,
+            FIN_SITE="x.localhost",
+            FIN_APT_PACKAGES="build-essential libpq-dev",
+        )
     )
     joined = " ".join(spec2.command)
     assert "apt-get install" in joined
-    assert joined.index("apt-get install") < joined.index("pip install")  # apt before pip
+    assert joined.index("apt-get install") < joined.index(
+        "pip install"
+    )  # apt before pip
     assert spec2.environment["FIN_APT_PACKAGES"] == "build-essential libpq-dev"
 
 
 def test_django_primary_spec_custom_version_and_port(tmp_path):
     lp = load_plug("django")
     spec = lp.instance.primary_spec(
-        _env(tmp_path, FIN_SITE="x.localhost", FIN_PYTHON_VERSION="3.11", FIN_DJANGO_PORT="9000")
+        _env(
+            tmp_path,
+            FIN_SITE="x.localhost",
+            FIN_PYTHON_VERSION="3.11",
+            FIN_DJANGO_PORT="9000",
+        )
     )
     assert spec.image == "python:3.11-slim"
     assert spec.web_port == 9000
@@ -244,7 +263,11 @@ def test_django_primary_spec_custom_version_and_port(tmp_path):
 def test_django_primary_spec_custom_image_and_bad_port(tmp_path):
     lp = load_plug("django")
     spec = lp.instance.primary_spec(
-        _env(tmp_path, FIN_DOCKER_IMAGE="myorg/django:dev", FIN_DJANGO_PORT="not-a-number")
+        _env(
+            tmp_path,
+            FIN_DOCKER_IMAGE="myorg/django:dev",
+            FIN_DJANGO_PORT="not-a-number",
+        )
     )
     assert spec.image == "myorg/django:dev"
     assert spec.web_port == 8000  # falls back safely
@@ -252,13 +275,15 @@ def test_django_primary_spec_custom_image_and_bad_port(tmp_path):
 
 def test_django_forwards_project_env_strips_control_vars(tmp_path):
     lp = load_plug("django")
-    spec = lp.instance.primary_spec(_env(
-        tmp_path,
-        FIN_SITE="x.localhost",            # control var → must NOT be forwarded
-        FIN_PYTHON_VERSION="3.11",         # control var → must NOT be forwarded
-        DJANGO_MYSQL_HOST="fin_mysql",     # app var → must be forwarded
-        SECRET_KEY="s3cret",               # app var → must be forwarded
-    ))
+    spec = lp.instance.primary_spec(
+        _env(
+            tmp_path,
+            FIN_SITE="x.localhost",  # control var → must NOT be forwarded
+            FIN_PYTHON_VERSION="3.11",  # control var → must NOT be forwarded
+            DJANGO_MYSQL_HOST="fin_mysql",  # app var → must be forwarded
+            SECRET_KEY="s3cret",  # app var → must be forwarded
+        )
+    )
     env = spec.environment
     assert env["DJANGO_MYSQL_HOST"] == "fin_mysql"
     assert env["SECRET_KEY"] == "s3cret"
@@ -271,8 +296,19 @@ def test_django_forwards_project_env_strips_control_vars(tmp_path):
 def test_django_commands():
     lp = load_plug("django")
     cmds = lp.instance.commands()
-    for name in ("manage", "migrate", "makemigrations", "shell", "createsuperuser",
-                 "collectstatic", "test", "startapp", "pip", "python", "bash"):
+    for name in (
+        "manage",
+        "migrate",
+        "makemigrations",
+        "shell",
+        "createsuperuser",
+        "collectstatic",
+        "test",
+        "startapp",
+        "pip",
+        "python",
+        "bash",
+    ):
         assert name in cmds
     assert "mm" in cmds["makemigrations"].aliases
     assert "csu" in cmds["createsuperuser"].aliases
@@ -310,14 +346,16 @@ def test_django_python_repl_is_interactive_with_no_args():
     lp = load_plug("django")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
-    cmds["python"].handler(ctx, [])           # REPL → interactive
+    cmds["python"].handler(ctx, [])  # REPL → interactive
     assert ctx.calls[0]["interactive"] is True
     ctx2 = FakeCtx()
     cmds["python"].handler(ctx2, ["-c", "print(1)"])  # one-shot → not
     assert ctx2.calls[0]["interactive"] is False
 
 
-@pytest.mark.parametrize("name,args", [("migrate", []), ("collectstatic", []), ("test", [])])
+@pytest.mark.parametrize(
+    "name,args", [("migrate", []), ("collectstatic", []), ("test", [])]
+)
 def test_django_oneshot_handlers_not_interactive(name, args):
     lp = load_plug("django")
     cmds = lp.instance.commands()
@@ -356,9 +394,7 @@ def test_asset_plugs(tmp_path, plug_name, expected_image, container_name):
         ("redis", "fin_redis", "redis:7-alpine"),
     ],
 )
-def test_asset_spec_has_ports_and_volumes(
-    tmp_path, plug_name, container_name, image
-):
+def test_asset_spec_has_ports_and_volumes(tmp_path, plug_name, container_name, image):
     lp = load_plug(plug_name)
     spec = lp.instance.asset_specs(_env(tmp_path))[0]
     assert spec.container_name == container_name
