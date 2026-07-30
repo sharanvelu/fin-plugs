@@ -67,6 +67,14 @@ push to master
 PR-side freshness (`Catalog Gate`) guarantees the committed `catalog.json`
 never drifts from `plugs/`, so master regenerations are near-always no-ops.
 
+## Housekeeping
+
+- **`cleanup-runs.yml`** — nightly cron (03:43 UTC, offset from fin's) that
+  deletes completed workflow runs which are cancelled/skipped or older than
+  30 days, keeping the Actions tab readable. Owner-guarded so forks don't run
+  the schedule; `workflow_dispatch` allows manual runs. Never a required
+  check.
+
 ## Deliberately not adopted from fin
 
 - **mypy job** (`static-code-analyze.yml`) — this repo has no mypy config of

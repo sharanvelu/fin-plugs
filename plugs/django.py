@@ -118,6 +118,14 @@ class DjangoPlug(FinPlug):
                         "(for native deps, e.g. 'build-essential libpq-dev')"
                     ),
                 ),
+                EnvVar(
+                    "FIN_DOCKER_IMAGE",
+                    required=False,
+                    description=(
+                        "Override the container image (advanced; default "
+                        "python:<FIN_PYTHON_VERSION>-slim)"
+                    ),
+                ),
             ]
         )
 

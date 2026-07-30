@@ -196,13 +196,17 @@ the pre-flat `load_plug_dir` API so they still run against an older fincli.
 `service="web"`, `web_exposed=True` + `web_port` for Traefik routing by
 `FIN_SITE`, `workdir_mount` telling `fin up` where to bind-mount the project,
 host port `None` (Traefik routes; no port juggling), and the developer command
-set. Laravel additionally bind-mounts the host's `~/.composer` to
+set. Both declare an optional `FIN_DOCKER_IMAGE` in their `env_spec()` that
+replaces the default image wholesale (`sharanvelu/laravel-php:<ver>` /
+`python:<ver>-slim`). Laravel additionally bind-mounts the host's `~/.composer` to
 `/root/.composer`, sharing the composer cache/config across every project and
 container. The two bundled apps show the two config-injection styles: Laravel reads
 the mounted `.env` file itself, so its spec forwards almost nothing; Django
 reads `os.environ`, so its spec forwards the project env into the container —
-minus `_FIN_CONTROL_VARS`, Fin's own steering variables, which must never leak
-into an app's environment.
+minus `_FIN_CONTROL_VARS`, an explicit list of the plug's own steering
+variables (not a blanket `FIN_*` prefix strip: a `FIN_*` var not on the list
+is forwarded like any other project var), with `FIN_APT_PACKAGES` deliberately
+re-added afterwards because the startup command expands `${FIN_APT_PACKAGES}`.
 
 **ASSET plugs** (mysql, postgres, redis, minio) describe machine-wide shared
 services: a **fixed** `container_name` (`fin_mysql`, …) so every project hits
@@ -216,9 +220,10 @@ Assets can opt into Traefik routing too: a spec that sets `web_exposed=True`
 + `web_port` is routed at the hostname in its `environment["FIN_ASSET_SITE"]`,
 falling back to `<service>.localhost` when the spec doesn't set one. The minio
 plug uses the fallback — `web_port=9001` and no `FIN_ASSET_SITE` — so its web
-console is served at `http://minio.localhost` (the S3 API stays on the
-published `:9000`). Plug authors who want a different hostname set
-`FIN_ASSET_SITE` in the spec's `environment`.
+console is reachable both on its published host port `:9001` and at
+`http://minio.localhost` via Traefik (the S3 API is published on host
+`:9000`). Plug authors who want a different hostname set `FIN_ASSET_SITE` in
+the spec's `environment`.
 
 Storage differs per asset: mysql, postgres, and redis persist into **named
 Docker volumes** (`fin_asset_mysql`, `fin_asset_postgres`, `fin_asset_redis`),
