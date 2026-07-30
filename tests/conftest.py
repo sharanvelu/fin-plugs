@@ -13,7 +13,8 @@ real ``~/.fin`` data dir. Two autouse mechanisms enforce that:
   real ``~/.fin``.
 
 Requires ``fincli`` to be importable — install the tool editable once:
-``python3 -m pip install --user -e /Users/sharan/Projects/05-DockR/fin-v2``.
+``python3 -m pip install --user -e <path to your fin-v2 checkout>``
+(e.g. a sibling ``fin-v2`` clone).
 
 Fixtures mirrored from ``fin-v2/tests/conftest.py`` so the plug tests here stay
 drop-in compatible with the tool's suite.
@@ -105,7 +106,7 @@ def isolate_config(tmp_path, monkeypatch):
 
     Guards against tests writing to the developer's real ~/.fin. PLUGS_DIR
     defaults to an empty tmp tree; plug-loading tests bypass discovery and
-    load each ``plugs/<name>.py`` directly via ``load_plug_dir`` (see
+    load each ``plugs/<name>.py`` directly via ``load_plug_file`` (see
     ``load_plug`` in test_bundled_plugs.py).
     """
     data_dir = tmp_path / "fin-data"
@@ -116,46 +117,3 @@ def isolate_config(tmp_path, monkeypatch):
     plugs_dir.mkdir()
     monkeypatch.setattr(Config, "PLUGS_DIR", plugs_dir)
     yield
-
-
-# --------------------------------------------------------------------------- #
-# Plug-tree helpers
-# --------------------------------------------------------------------------- #
-def write_plug(
-    plugs_dir: Path,
-    *,
-    type_sub: str,
-    name: str,
-    class_name: str,
-    plug_type: str,
-    version: str = "1.0.0",
-    description: str = "",
-    body_extra: str = "",
-) -> Path:
-    """Write a minimal FinPlug package under ``plugs_dir/<type_sub>/<name>``.
-
-    Builds the App/Asset/Global tree that fin-v2's *discovery* still expects —
-    NOT this repo's flat ``plugs/<name>.py`` layout. Returns the package
-    directory path.
-    """
-    pkg = plugs_dir / type_sub / name
-    pkg.mkdir(parents=True, exist_ok=True)
-    source = f'''
-from fincli.plugs.base import FinPlug, PlugType, PlugCommand
-
-
-class {class_name}(FinPlug):
-    name = "{name}"
-    version = "{version}"
-    plug_type = PlugType.{plug_type}
-    description = "{description}"
-{body_extra}
-'''
-    (pkg / "__init__.py").write_text(source, encoding="utf-8")
-    return pkg
-
-
-@pytest.fixture
-def plug_factory():
-    """Return the ``write_plug`` helper for building temp plugs."""
-    return write_plug

@@ -39,7 +39,7 @@ tests — no packaging, no dependencies.
 ## Setup / test / run
 
 ```bash
-python3 -m pip install --user -e /Users/sharan/Projects/05-DockR/fin-v2   # make fincli importable (no venv)
+python3 -m pip install --user -e <path to your fin-v2 checkout>   # make fincli importable (no venv)
 python3 -m pytest                                                  # run the test suite
 python3 scripts/build_catalog.py --check                           # catalog matches plugs/
 ```
