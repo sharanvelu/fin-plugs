@@ -78,14 +78,6 @@ never drifts from `plugs/`, so master regenerations are near-always no-ops.
 - **`build-check.yml` / `tag.yml` / `build.yml`** — nothing to package here;
   the catalog release flow above is this repo's whole release story.
 
-## Smoke job transitional note
-
-`tests.yml`'s `smoke` job copies `plugs/*.py` into BOTH `$FIN_DATA_DIR/plugs/`
-(flat — what fin's upcoming loader scans) and `$FIN_DATA_DIR/plugs/App/`
-(type dir — what released fin discovers today), so each fincli generation
-finds every plug exactly once. Collapse to the flat copy alone once fin
-master ships the flat-layout loader.
-
 ## Hardening conventions (apply to every workflow)
 
 - `permissions: {}` at workflow level; per-job grants only.

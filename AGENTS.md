@@ -39,11 +39,9 @@ public API. A plug's type (APP/ASSET/GLOBAL) is declared in-class via
 `plug_type`; the layout carries no type information.
 
 At runtime plugs load from `Config.PLUGS_DIR`, fixed at `~/.fin/plugs` (moves
-with `FIN_DATA_DIR`) — see `fin-v2/fincli/config.py`. **Transitional:** the
-released `fincli` still discovers only the old `App/Asset/Global` tree, so
-there is currently no working dev symlink; plugs here are exercised via the
-test suite until fin-v2 ships flat-layout support (the symlink then becomes
-`ln -s "$PWD/plugs" ~/.fin/plugs`).
+with `FIN_DATA_DIR`) — see `fin-v2/fincli/config.py`. The loader scans a flat
+directory of `<name>.py` files — exactly this repo's `plugs/` layout — so the
+dev setup is a single symlink: `ln -s "$PWD/plugs" ~/.fin/plugs`.
 
 ## Conventions (do not violate)
 

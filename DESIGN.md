@@ -182,13 +182,11 @@ never crashes Fin. Entries starting with `.` or `_` are ignored (so
 only a cache over the plug files, re-synced by `fin plugs list` — the files
 are the source of truth.
 
-**Transitional note.** The *released* fincli still discovers plugs only under
-the legacy `App/`/`Asset/`/`Global/` type directories
-(`Config.PLUG_TYPE_DIRS`) and its `load_plug_dir` takes the type from the
-directory. Until fin-v2 ships flat-layout discovery, this repo cannot be
-symlinked into `~/.fin/plugs`; the tests and `scripts/build_catalog.py` load
-each file directly through the loader's single-file path instead (and adapt
-to either `load_plug_dir` signature).
+Flat-layout discovery shipped in fin v0.1.4; earlier releases discovered
+plugs only under the legacy `App/`/`Asset/`/`Global/` type directories. The
+tests and `scripts/build_catalog.py` load each file through the loader's
+single-file entry point (`load_plug_file`), keeping a small fallback shim for
+the pre-flat `load_plug_dir` API so they still run against an older fincli.
 
 ## 5. App vs Asset in practice
 
@@ -216,7 +214,7 @@ the shared engine). Assets are isolated by database, not by container.
 
 `tests/test_bundled_plugs.py` exercises the **real** plugs in this repo by
 loading each `plugs/<name>.py` through the real loader's single-file path
-(`load_plug_dir`) — so the tests cover the class contract, env specs,
+(`load_plug_file`) — so the tests cover the class contract, env specs,
 container specs, and command wiring exactly as `fin up` would see them. Because plugs are declarative, no Docker daemon is involved: handler
 tests substitute a `FakeCtx` recording `ctx.exec` calls and assert the exact
 command, workdir, and interactivity delegated. Autouse fixtures in
