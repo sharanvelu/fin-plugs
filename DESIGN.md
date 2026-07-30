@@ -37,7 +37,7 @@ That makes the install URL deterministic from the plug name alone:
 fin plugs install <name>
   → https://raw.githubusercontent.com/sharanvelu/fin-plugs/master/plugs/<name>.py
 fin plugs search <query>
-  → https://github.com/sharanvelu/fin-plugs/releases/download/latest/catalog.json
+  → https://github.com/sharanvelu/fin-plugs/releases/latest/download/catalog.json
 ```
 
 Renaming or moving a file under `plugs/` is therefore a **breaking change**
@@ -47,7 +47,9 @@ by `scripts/build_catalog.py` and never hand-edited. CI keeps it honest twice
 over: PRs fail if the committed copy drifts, and every push to `master`
 publishes the regenerated catalog to GitHub Releases — a new incremental
 patch version (`1.1.2` → `1.1.3`, pinned forever) plus the rolling `latest`
-release, whose asset is always replaced. The catalog only indexes: whichever
+release, whose asset is always replaced. The CLI fetches via
+`releases/latest/download/` — GitHub's redirect to the newest numbered
+release's asset. The catalog only indexes: whichever
 catalog version a client reads, plug *files* are served from the `master`
 branch (the catalog's `files_base_url`). A plug's type is declared in-class
 (`plug_type`); the flat layout carries no type information.
@@ -194,7 +196,9 @@ the pre-flat `load_plug_dir` API so they still run against an older fincli.
 `service="web"`, `web_exposed=True` + `web_port` for Traefik routing by
 `FIN_SITE`, `workdir_mount` telling `fin up` where to bind-mount the project,
 host port `None` (Traefik routes; no port juggling), and the developer command
-set. The two bundled apps show the two config-injection styles: Laravel reads
+set. Laravel additionally bind-mounts the host's `~/.composer` to
+`/root/.composer`, sharing the composer cache/config across every project and
+container. The two bundled apps show the two config-injection styles: Laravel reads
 the mounted `.env` file itself, so its spec forwards almost nothing; Django
 reads `os.environ`, so its spec forwards the project env into the container —
 minus `_FIN_CONTROL_VARS`, Fin's own steering variables, which must never leak
@@ -207,11 +211,23 @@ storage, and credentials from `Config.ASSET_USERNAME`/`ASSET_PASSWORD`/
 `ASSET_DEFAULT_DATABASE` (fixed `fin`/`password`/`fin` — throwaway local-dev
 values by design; `fin up` auto-creates each project's `DB_DATABASE` inside
 the shared engine). Assets are isolated by database, not by container.
-Storage differs by asset: mysql, postgres, and redis persist into **named
+
+Assets can opt into Traefik routing too: a spec that sets `web_exposed=True`
++ `web_port` is routed at the hostname in its `environment["FIN_ASSET_SITE"]`,
+falling back to `<service>.localhost` when the spec doesn't set one. The minio
+plug uses the fallback — `web_port=9001` and no `FIN_ASSET_SITE` — so its web
+console is served at `http://minio.localhost` (the S3 API stays on the
+published `:9000`). Plug authors who want a different hostname set
+`FIN_ASSET_SITE` in the spec's `environment`.
+
+Storage differs per asset: mysql, postgres, and redis persist into **named
 Docker volumes** (`fin_asset_mysql`, `fin_asset_postgres`, `fin_asset_redis`),
 while minio deliberately **bind-mounts the host path** `~/Documents/minio/data`
 so stored objects are browsable in Finder — unlike the named volumes, its data
-lives outside Docker's storage and survives `docker volume` cleanup.
+lives outside Docker's storage and survives `docker volume` cleanup. (Host
+bind mounts aren't unique to minio — the laravel APP plug bind-mounts the
+host's `~/.composer` too; minio is just the only *asset* that stores its data
+this way.)
 
 **GLOBAL plugs** contribute project-independent commands; there are none yet.
 

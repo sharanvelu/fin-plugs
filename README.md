@@ -52,8 +52,11 @@ installing that plug: treat plug filenames as public API.
 GitHub Releases (see below):
 
 ```
-https://github.com/sharanvelu/fin-plugs/releases/download/latest/catalog.json
+https://github.com/sharanvelu/fin-plugs/releases/latest/download/catalog.json
 ```
+
+(That is GitHub's `releases/latest/download/` redirect — it always resolves to
+the newest numbered release's asset.)
 
 Whichever catalog version is read, plug files themselves are always fetched
 from the `master` branch — the catalog's `files_base_url` records that base.
@@ -80,8 +83,9 @@ command names, and file path — that powers `fin plugs search`. It is
   skipped when the catalog content hasn't changed.
 
 Version-pinned catalogs stay available forever at
-`releases/download/<version>/catalog.json`; `releases/download/latest/catalog.json`
-always serves the current one. The catalog only indexes — plug files are
+`releases/download/<version>/catalog.json`; the CLI fetches
+`releases/latest/download/catalog.json` (GitHub's newest-release redirect),
+which always serves the current one. The catalog only indexes — plug files are
 served from `master` (`files_base_url`), regardless of catalog version.
 
 ## Development workflow
@@ -94,7 +98,7 @@ For development, symlink it there once: `ln -s "$PWD/plugs" ~/.fin/plugs`.
 git clone <this-repo> && cd fin-plugs
 
 # 1. Make fincli importable for your IDE and the tests (no venv):
-python3 -m pip install --user -e /Users/sharan/Projects/05-DockR/fin-v2
+python3 -m pip install --user -e <path to your fin-v2 checkout>
 
 # 2. Run the tests:
 python3 -m pytest
@@ -122,12 +126,12 @@ belongs *inside the container* the plug describes, not in the plug itself.
 
 | Plug | Type | Summary |
 | ---- | ---- | ------- |
-| `laravel` | APP | Laravel/PHP runtime (`sharanvelu/laravel-php`, web on 80) with the full artisan/composer/tinker/migrate/queue command set; installs `~/.fin/certs` into the container (`install_certs=True`). |
+| `laravel` | APP | Laravel/PHP runtime (`sharanvelu/laravel-php`, web on 80) with the full artisan/composer/tinker/migrate/queue command set; bind-mounts the host's `~/.composer` to `/root/.composer` so the composer cache is shared across projects; installs `~/.fin/certs` into the container (`install_certs=True`). |
 | `django` | APP | Django on `python:<ver>-slim`; installs `requirements.txt` on start (warm shared pip cache), runs `manage.py runserver` with live autoreload; contributes manage/migrate/shell/createsuperuser/… commands. |
 | `mysql` | ASSET | Shared MySQL 8.0 at `fin_mysql:3306`, credentials `fin`/`password`, persistent `fin_asset_mysql` volume. |
 | `postgres` | ASSET | Shared PostgreSQL 16 (alpine) at `fin_postgres:5432`, credentials `fin`/`password`, persistent `fin_asset_postgres` volume. |
 | `redis` | ASSET | Shared Redis 7 (alpine) at `fin_redis:6379`, persistent `fin_asset_redis` volume. |
-| `minio` | ASSET | Shared MinIO object store at `fin_minio` (S3 API :9000, web console :9001, routed by Traefik), credentials `fin`/`password`. |
+| `minio` | ASSET | Shared MinIO object store at `fin_minio` (S3 API :9000; web console :9001, Traefik-routed at `http://minio.localhost`), credentials `fin`/`password`, data bind-mounted to the host's `~/Documents/minio/data`. |
 
 ## Writing a plug
 

@@ -17,7 +17,8 @@ no packaging, no dependencies, and nothing to build.
 
 ```
 plugs/                    every plug — ONE lowercase file per plug
-  laravel.py              LaravelPlug (APP) — PHP image, artisan/composer/tinker/… commands
+  laravel.py              LaravelPlug (APP) — PHP image, artisan/composer/tinker/… commands;
+                          bind-mounts the host's ~/.composer to /root/.composer (shared cache)
   django.py               DjangoPlug (APP) — python-slim + runserver, manage/migrate/shell/… commands
   mysql.py                MySQLPlug (ASSET)    — fin_mysql, mysql:8.0
   postgres.py             PostgresPlug (ASSET) — fin_postgres, postgres:16-alpine
@@ -98,15 +99,15 @@ dev setup is a single symlink: `ln -s "$PWD/plugs" ~/.fin/plugs`.
 
 ```bash
 # one-time: make fincli importable (no venv; Fin is a --user install)
-python3 -m pip install --user -e /Users/sharan/Projects/05-DockR/fin-v2
+python3 -m pip install --user -e <path to your fin-v2 checkout>
 
 python3 -m pytest                     # full suite
 python3 -m pytest -k django           # focused run
 ```
 
 The suite loads the **real** plugs in this repo (each `plugs/<name>.py` loaded
-directly through the loader's single-file path — released fincli's *discovery*
-doesn't know the flat layout yet) but is otherwise hermetic: an autouse fixture
+directly through the loader's single-file path, `load_plug_file` — flat-layout
+discovery itself shipped in fin v0.1.4) but is otherwise hermetic: an autouse fixture
 re-points `Config.DATA_DIR`/`CONFIG_FILE`/`REGISTRY_DB` at a per-test tmp dir
 and another clears the `DockerService` singleton, so no test can touch a real
 Docker daemon or the developer's `~/.fin`.
@@ -152,8 +153,12 @@ and the style checks with `ruff check plugs scripts tests` +
   follow the existing `env.get("X", default) or default` pattern when an empty
   value should fall back.
 - **Don't forward Fin control vars into app containers.** See the django plug's
-  `_FIN_CONTROL_VARS` strip — `FIN_*` steering vars must not leak into the
-  app's environment.
+  `_FIN_CONTROL_VARS` strip — an explicit list of the plug's own steering
+  variables, **not** a blanket `FIN_*` prefix filter: any `FIN_*` var not on
+  the list (`FIN_PHP_VERSION`, `FIN_ASSET_SITE`, …) is forwarded with the rest
+  of the project env, and django deliberately re-adds `FIN_APT_PACKAGES`
+  because its startup command expands `${FIN_APT_PACKAGES}`. When you add a
+  steering var to a plug, add it to that plug's strip list.
 - **`fin plugs list` writes the real registry.** It re-syncs
   `~/.fin/registry.db` from disk; that's expected outside tests, but never do
   it *inside* a test without the isolation fixtures.

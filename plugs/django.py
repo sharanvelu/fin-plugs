@@ -47,7 +47,9 @@ PIP_CACHE_DIR = "/root/.cache/pip"
 #: manage.py commands that prompt for input and need an interactive session.
 _INTERACTIVE_MANAGE = {"shell", "dbshell", "createsuperuser", "changepassword"}
 
-#: Fin's own control variables — not forwarded into the app container's env.
+#: Fin's own control variables — stripped from the project env before it is
+#: forwarded into the app container. Exception: FIN_APT_PACKAGES is re-added
+#: afterwards because the startup command expands ${FIN_APT_PACKAGES}.
 _FIN_CONTROL_VARS = frozenset(
     {
         "FIN_APP",
@@ -150,8 +152,10 @@ class DjangoPlug(FinPlug):
 
         # Forward the project's own .env into the container. Django reads its
         # config from os.environ (e.g. DJANGO_MYSQL_HOST, SECRET_KEY), unlike
-        # Laravel which reads the mounted .env file directly. Fin's own control
-        # vars are stripped so they don't leak into the app's environment.
+        # Laravel which reads the mounted .env file directly. This plug's own
+        # control vars (_FIN_CONTROL_VARS) are stripped — except
+        # FIN_APT_PACKAGES, re-added below for the ${FIN_APT_PACKAGES}
+        # expansion in the startup command.
         environment = {
             k: v for k, v in env.values.items() if k not in _FIN_CONTROL_VARS
         }
