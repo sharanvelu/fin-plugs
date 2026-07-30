@@ -202,11 +202,16 @@ into an app's environment.
 
 **ASSET plugs** (mysql, postgres, redis, minio) describe machine-wide shared
 services: a **fixed** `container_name` (`fin_mysql`, …) so every project hits
-the same instance, published host ports for host-side tooling, a persistent
-volume, and credentials from `Config.ASSET_USERNAME`/`ASSET_PASSWORD`/
+the same instance, published host ports for host-side tooling, persistent
+storage, and credentials from `Config.ASSET_USERNAME`/`ASSET_PASSWORD`/
 `ASSET_DEFAULT_DATABASE` (fixed `fin`/`password`/`fin` — throwaway local-dev
 values by design; `fin up` auto-creates each project's `DB_DATABASE` inside
 the shared engine). Assets are isolated by database, not by container.
+Storage differs by asset: mysql, postgres, and redis persist into **named
+Docker volumes** (`fin_asset_mysql`, `fin_asset_postgres`, `fin_asset_redis`),
+while minio deliberately **bind-mounts the host path** `~/Documents/minio/data`
+so stored objects are browsable in Finder — unlike the named volumes, its data
+lives outside Docker's storage and survives `docker volume` cleanup.
 
 **GLOBAL plugs** contribute project-independent commands; there are none yet.
 
