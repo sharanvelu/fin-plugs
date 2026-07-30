@@ -1,7 +1,7 @@
 """Shared pytest fixtures for the fin-plugs test suite.
 
-The suite loads the *real* plugs in this repo through the real fincli loader
-(tests point ``Config.PLUGS_DIR`` at the repo root — see ``REPO_ROOT``), but is
+The suite loads the *real* plugs in this repo (one file per plug under
+``plugs/``) through the real fincli loader's single-file path, but is
 otherwise hermetic: it must NEVER touch a real Docker daemon or the developer's
 real ``~/.fin`` data dir. Two autouse mechanisms enforce that:
 
@@ -29,7 +29,7 @@ import pytest
 from fincli.config import Config
 from fincli.core import docker_client as docker_client_mod
 
-#: This repository's root — a valid PLUGS_DIR tree (App/ Asset/ Global/).
+#: This repository's root; the bundled plugs live in ``plugs/<name>.py``.
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -104,9 +104,9 @@ def isolate_config(tmp_path, monkeypatch):
     """Point all Config paths at a per-test tmp dir.
 
     Guards against tests writing to the developer's real ~/.fin. PLUGS_DIR
-    defaults to an empty tmp tree; plug-loading tests override it (see the
-    ``bundled_plugs`` fixture in test_bundled_plugs.py, which points it at
-    this repo's root).
+    defaults to an empty tmp tree; plug-loading tests bypass discovery and
+    load each ``plugs/<name>.py`` directly via ``load_plug_dir`` (see
+    ``load_plug`` in test_bundled_plugs.py).
     """
     data_dir = tmp_path / "fin-data"
     monkeypatch.setattr(Config, "DATA_DIR", data_dir)
@@ -134,7 +134,9 @@ def write_plug(
 ) -> Path:
     """Write a minimal FinPlug package under ``plugs_dir/<type_sub>/<name>``.
 
-    Returns the package directory path.
+    Builds the App/Asset/Global tree that fin-v2's *discovery* still expects —
+    NOT this repo's flat ``plugs/<name>.py`` layout. Returns the package
+    directory path.
     """
     pkg = plugs_dir / type_sub / name
     pkg.mkdir(parents=True, exist_ok=True)

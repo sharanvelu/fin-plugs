@@ -1,8 +1,7 @@
 """Tests for the bundled plugs (Laravel/Django apps + MySQL/Redis/Postgres/Minio assets).
 
-These load the *real* plugs in this repository by name, exercising the plug
-contracts (env spec, primary/asset specs, command maps) through the real
-fincli loader.
+These load the *real* plugs in this repository, exercising the plug contracts
+(env spec, primary/asset specs, command maps) through the real fincli loader.
 """
 
 from __future__ import annotations
@@ -14,31 +13,37 @@ import pytest
 from fincli.config import Config
 from fincli.core.env import ProjectEnv
 from fincli.plugs.base import PlugType
-from fincli.plugs.loader import load_by_name
+from fincli.plugs.loader import load_plug_dir
 
-#: The repo root is itself a PLUGS_DIR tree (App/ Asset/ Global/).
 REPO_ROOT = Path(__file__).resolve().parent.parent
+#: Every bundled plug is a single file: plugs/<name>.py.
+PLUGS_DIR = REPO_ROOT / "plugs"
 
 
-@pytest.fixture
-def bundled_plugs(monkeypatch):
-    monkeypatch.setattr(Config, "PLUGS_DIR", REPO_ROOT)
-    return REPO_ROOT
+def load_plug(name: str):
+    """Load ``plugs/<name>.py`` through the loader's single-file path.
+
+    fin-v2's tree discovery (``load_all``/``load_by_name``) still walks the
+    old App/Asset/Global layout, so tests load each file directly. The
+    PlugType argument is a placeholder the signature requires — assertions
+    use the *declared* ``instance.plug_type``, never this value.
+    """
+    return load_plug_dir(PLUGS_DIR / name, PlugType.APP)
 
 
 def _env(tmp_path, **values):
     return ProjectEnv(cwd=tmp_path, values=dict(values))
 
 
-def test_laravel_loads(bundled_plugs):
-    lp = load_by_name("laravel")
+def test_laravel_loads():
+    lp = load_plug("laravel")
     assert lp is not None
-    assert lp.plug_type is PlugType.APP
+    assert lp.instance.plug_type is PlugType.APP
     assert lp.instance.name == "laravel"
 
 
-def test_laravel_env_spec(bundled_plugs):
-    lp = load_by_name("laravel")
+def test_laravel_env_spec():
+    lp = load_plug("laravel")
     spec = lp.instance.env_spec()
     names = {v.name for v in spec.variables}
     assert "FIN_SITE" in names
@@ -49,8 +54,8 @@ def test_laravel_env_spec(bundled_plugs):
     assert site_var.required is True
 
 
-def test_laravel_primary_spec(bundled_plugs, tmp_path):
-    lp = load_by_name("laravel")
+def test_laravel_primary_spec(tmp_path):
+    lp = load_plug("laravel")
     spec = lp.instance.primary_spec(_env(tmp_path, FIN_SITE="app.localhost", FIN_PHP_VERSION="8.3"))
     assert spec.service == "web"
     assert spec.image == "sharanvelu/laravel-php:8.3"
@@ -63,14 +68,14 @@ def test_laravel_primary_spec(bundled_plugs, tmp_path):
     assert spec.cert_update_cmd == ["update-ca-certificates"]
 
 
-def test_laravel_primary_spec_custom_image(bundled_plugs, tmp_path):
-    lp = load_by_name("laravel")
+def test_laravel_primary_spec_custom_image(tmp_path):
+    lp = load_plug("laravel")
     spec = lp.instance.primary_spec(_env(tmp_path, FIN_DOCKER_IMAGE="custom/image:tag"))
     assert spec.image == "custom/image:tag"
 
 
-def test_laravel_commands(bundled_plugs):
-    lp = load_by_name("laravel")
+def test_laravel_commands():
+    lp = load_plug("laravel")
     cmds = lp.instance.commands()
     for name in ("artisan", "composer", "tinker", "migrate", "bash", "php"):
         assert name in cmds
@@ -93,8 +98,8 @@ class FakeCtx:
         return 0
 
 
-def test_laravel_artisan_handler_delegates(bundled_plugs, tmp_path):
-    lp = load_by_name("laravel")
+def test_laravel_artisan_handler_delegates(tmp_path):
+    lp = load_plug("laravel")
     cmds = lp.instance.commands()
 
     ctx = FakeCtx()
@@ -104,8 +109,8 @@ def test_laravel_artisan_handler_delegates(bundled_plugs, tmp_path):
     assert ctx.calls[0]["workdir"] == "/var/www/html"
 
 
-def test_laravel_migrate_subcommands(bundled_plugs, tmp_path):
-    lp = load_by_name("laravel")
+def test_laravel_migrate_subcommands(tmp_path):
+    lp = load_plug("laravel")
     cmds = lp.instance.commands()
 
     ctx = FakeCtx()
@@ -116,16 +121,16 @@ def test_laravel_migrate_subcommands(bundled_plugs, tmp_path):
 # --------------------------------------------------------------------------- #
 # Interactive contract.
 # --------------------------------------------------------------------------- #
-def test_laravel_tinker_is_interactive(bundled_plugs):
-    lp = load_by_name("laravel")
+def test_laravel_tinker_is_interactive():
+    lp = load_plug("laravel")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
     cmds["tinker"].handler(ctx, [])
     assert ctx.calls[0]["interactive"] is True
 
 
-def test_laravel_bash_is_interactive(bundled_plugs):
-    lp = load_by_name("laravel")
+def test_laravel_bash_is_interactive():
+    lp = load_plug("laravel")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
     cmds["bash"].handler(ctx, [])
@@ -147,8 +152,8 @@ def test_laravel_bash_is_interactive(bundled_plugs):
         ("queue", ["work"]),
     ],
 )
-def test_laravel_artisan_wrappers_are_interactive(bundled_plugs, name, args):
-    lp = load_by_name("laravel")
+def test_laravel_artisan_wrappers_are_interactive(name, args):
+    lp = load_plug("laravel")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
     cmds[name].handler(ctx, args)
@@ -158,8 +163,8 @@ def test_laravel_artisan_wrappers_are_interactive(bundled_plugs, name, args):
 # Genuinely non-interactive helpers stay non-interactive (they still get colour
 # via the streamed TTY path, just no stdin attached).
 @pytest.mark.parametrize("name,args", [("phpunit", []), ("php", ["-v"])])
-def test_laravel_oneshot_handlers_not_interactive(bundled_plugs, name, args):
-    lp = load_by_name("laravel")
+def test_laravel_oneshot_handlers_not_interactive(name, args):
+    lp = load_plug("laravel")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
     cmds[name].handler(ctx, args)
@@ -169,15 +174,15 @@ def test_laravel_oneshot_handlers_not_interactive(bundled_plugs, name, args):
 # --------------------------------------------------------------------------- #
 # Django app plug
 # --------------------------------------------------------------------------- #
-def test_django_loads(bundled_plugs):
-    lp = load_by_name("django")
+def test_django_loads():
+    lp = load_plug("django")
     assert lp is not None
-    assert lp.plug_type is PlugType.APP
+    assert lp.instance.plug_type is PlugType.APP
     assert lp.instance.name == "django"
 
 
-def test_django_env_spec(bundled_plugs):
-    lp = load_by_name("django")
+def test_django_env_spec():
+    lp = load_plug("django")
     spec = lp.instance.env_spec()
     names = {v.name for v in spec.variables}
     assert {"FIN_SITE", "FIN_PYTHON_VERSION", "FIN_DJANGO_PORT", "FIN_REQUIREMENTS"} <= names
@@ -187,8 +192,8 @@ def test_django_env_spec(bundled_plugs):
     assert py_var.default == "3.12"
 
 
-def test_django_primary_spec(bundled_plugs, tmp_path):
-    lp = load_by_name("django")
+def test_django_primary_spec(tmp_path):
+    lp = load_plug("django")
     spec = lp.instance.primary_spec(_env(tmp_path, FIN_SITE="app.localhost"))
     assert spec.service == "web"
     assert spec.image == "python:3.12-slim"  # default
@@ -206,8 +211,8 @@ def test_django_primary_spec(bundled_plugs, tmp_path):
     assert spec.environment.get("PYTHONUNBUFFERED") == "1"
 
 
-def test_django_apt_packages_opt_in(bundled_plugs, tmp_path):
-    lp = load_by_name("django")
+def test_django_apt_packages_opt_in(tmp_path):
+    lp = load_plug("django")
     # Default: no apt step in the startup command.
     spec = lp.instance.primary_spec(_env(tmp_path, FIN_SITE="x.localhost"))
     assert "apt-get install" not in " ".join(spec.command)
@@ -223,8 +228,8 @@ def test_django_apt_packages_opt_in(bundled_plugs, tmp_path):
     assert spec2.environment["FIN_APT_PACKAGES"] == "build-essential libpq-dev"
 
 
-def test_django_primary_spec_custom_version_and_port(bundled_plugs, tmp_path):
-    lp = load_by_name("django")
+def test_django_primary_spec_custom_version_and_port(tmp_path):
+    lp = load_plug("django")
     spec = lp.instance.primary_spec(
         _env(tmp_path, FIN_SITE="x.localhost", FIN_PYTHON_VERSION="3.11", FIN_DJANGO_PORT="9000")
     )
@@ -233,8 +238,8 @@ def test_django_primary_spec_custom_version_and_port(bundled_plugs, tmp_path):
     assert "runserver 0.0.0.0:9000" in " ".join(spec.command)
 
 
-def test_django_primary_spec_custom_image_and_bad_port(bundled_plugs, tmp_path):
-    lp = load_by_name("django")
+def test_django_primary_spec_custom_image_and_bad_port(tmp_path):
+    lp = load_plug("django")
     spec = lp.instance.primary_spec(
         _env(tmp_path, FIN_DOCKER_IMAGE="myorg/django:dev", FIN_DJANGO_PORT="not-a-number")
     )
@@ -242,8 +247,8 @@ def test_django_primary_spec_custom_image_and_bad_port(bundled_plugs, tmp_path):
     assert spec.web_port == 8000  # falls back safely
 
 
-def test_django_forwards_project_env_strips_control_vars(bundled_plugs, tmp_path):
-    lp = load_by_name("django")
+def test_django_forwards_project_env_strips_control_vars(tmp_path):
+    lp = load_plug("django")
     spec = lp.instance.primary_spec(_env(
         tmp_path,
         FIN_SITE="x.localhost",            # control var → must NOT be forwarded
@@ -260,8 +265,8 @@ def test_django_forwards_project_env_strips_control_vars(bundled_plugs, tmp_path
     assert env["PYTHONUNBUFFERED"] == "1"
 
 
-def test_django_commands(bundled_plugs):
-    lp = load_by_name("django")
+def test_django_commands():
+    lp = load_plug("django")
     cmds = lp.instance.commands()
     for name in ("manage", "migrate", "makemigrations", "shell", "createsuperuser",
                  "collectstatic", "test", "startapp", "pip", "python", "bash"):
@@ -271,8 +276,8 @@ def test_django_commands(bundled_plugs):
     assert "py" in cmds["python"].aliases
 
 
-def test_django_manage_passthrough(bundled_plugs):
-    lp = load_by_name("django")
+def test_django_manage_passthrough():
+    lp = load_plug("django")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
     cmds["manage"].handler(ctx, ["migrate", "--noinput"])
@@ -282,24 +287,24 @@ def test_django_manage_passthrough(bundled_plugs):
 
 
 @pytest.mark.parametrize("name", ["shell", "dbshell", "createsuperuser", "bash"])
-def test_django_interactive_handlers(bundled_plugs, name):
-    lp = load_by_name("django")
+def test_django_interactive_handlers(name):
+    lp = load_plug("django")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
     cmds[name].handler(ctx, [])
     assert ctx.calls[0]["interactive"] is True
 
 
-def test_django_manage_interactive_for_prompting_subcommands(bundled_plugs):
-    lp = load_by_name("django")
+def test_django_manage_interactive_for_prompting_subcommands():
+    lp = load_plug("django")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
     cmds["manage"].handler(ctx, ["createsuperuser"])
     assert ctx.calls[0]["interactive"] is True
 
 
-def test_django_python_repl_is_interactive_with_no_args(bundled_plugs):
-    lp = load_by_name("django")
+def test_django_python_repl_is_interactive_with_no_args():
+    lp = load_plug("django")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
     cmds["python"].handler(ctx, [])           # REPL → interactive
@@ -310,8 +315,8 @@ def test_django_python_repl_is_interactive_with_no_args(bundled_plugs):
 
 
 @pytest.mark.parametrize("name,args", [("migrate", []), ("collectstatic", []), ("test", [])])
-def test_django_oneshot_handlers_not_interactive(bundled_plugs, name, args):
-    lp = load_by_name("django")
+def test_django_oneshot_handlers_not_interactive(name, args):
+    lp = load_plug("django")
     cmds = lp.instance.commands()
     ctx = FakeCtx()
     cmds[name].handler(ctx, args)
@@ -330,10 +335,10 @@ def test_django_oneshot_handlers_not_interactive(bundled_plugs, name, args):
         ("minio", "quay.io/minio/minio", "fin_minio"),
     ],
 )
-def test_asset_plugs(bundled_plugs, tmp_path, plug_name, expected_image, container_name):
-    lp = load_by_name(plug_name)
+def test_asset_plugs(tmp_path, plug_name, expected_image, container_name):
+    lp = load_plug(plug_name)
     assert lp is not None
-    assert lp.plug_type is PlugType.ASSET
+    assert lp.instance.plug_type is PlugType.ASSET
     specs = lp.instance.asset_specs(_env(tmp_path))
     assert len(specs) == 1
     spec = specs[0]
@@ -349,9 +354,9 @@ def test_asset_plugs(bundled_plugs, tmp_path, plug_name, expected_image, contain
     ],
 )
 def test_asset_spec_has_ports_and_volumes(
-    bundled_plugs, tmp_path, plug_name, container_name, image
+    tmp_path, plug_name, container_name, image
 ):
-    lp = load_by_name(plug_name)
+    lp = load_plug(plug_name)
     spec = lp.instance.asset_specs(_env(tmp_path))[0]
     assert spec.container_name == container_name
     assert spec.image == image
@@ -359,17 +364,17 @@ def test_asset_spec_has_ports_and_volumes(
     assert spec.volumes  # at least one persistent volume
 
 
-def test_mysql_uses_config_credentials(bundled_plugs, tmp_path, monkeypatch):
+def test_mysql_uses_config_credentials(tmp_path, monkeypatch):
     monkeypatch.setattr(Config, "ASSET_USERNAME", "fin")
     monkeypatch.setattr(Config, "ASSET_PASSWORD", "password")
-    lp = load_by_name("mysql")
+    lp = load_plug("mysql")
     spec = lp.instance.asset_specs(_env(tmp_path))[0]
     assert spec.environment["MYSQL_USER"] == "fin"
     assert spec.environment["MYSQL_PASSWORD"] == "password"
 
 
-def test_minio_spec(bundled_plugs, tmp_path):
-    lp = load_by_name("minio")
+def test_minio_spec(tmp_path):
+    lp = load_plug("minio")
     spec = lp.instance.asset_specs(_env(tmp_path))[0]
     # S3 API on 9000, web console on 9001, both published to the host.
     ports = {(p.container, p.host) for p in spec.ports}
@@ -383,10 +388,10 @@ def test_minio_spec(bundled_plugs, tmp_path):
     assert spec.volumes and spec.volumes[0].container == "/data"
 
 
-def test_minio_uses_config_credentials(bundled_plugs, tmp_path, monkeypatch):
+def test_minio_uses_config_credentials(tmp_path, monkeypatch):
     monkeypatch.setattr(Config, "ASSET_USERNAME", "fin")
     monkeypatch.setattr(Config, "ASSET_PASSWORD", "password")
-    lp = load_by_name("minio")
+    lp = load_plug("minio")
     spec = lp.instance.asset_specs(_env(tmp_path))[0]
     assert spec.environment["MINIO_ROOT_USER"] == "fin"
     assert spec.environment["MINIO_ROOT_PASSWORD"] == "password"
