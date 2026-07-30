@@ -47,8 +47,15 @@ and every filename is lowercase and equal to the plug's declared `name`.
 **Renaming or moving a file under `plugs/` is a breaking change** for everyone
 installing that plug: treat plug filenames as public API.
 
-`fin plugs search <query>` fetches [`catalog.json`](catalog.json) from the
-same raw-URL scheme (repo root, `master` branch).
+`fin plugs search <query>` reads [`catalog.json`](catalog.json), published on
+GitHub Releases (see below):
+
+```
+https://github.com/sharanvelu/fin-plugs/releases/download/latest/catalog.json
+```
+
+Whichever catalog version is read, plug files themselves are always fetched
+from the `master` branch — the catalog's `files_base_url` records that base.
 
 Installed plugs land in `PLUGS_DIR`, fixed at `~/.fin/plugs` (it moves with
 `FIN_DATA_DIR`). A broken plug logs a warning and is skipped; it never crashes
@@ -65,8 +72,16 @@ command names, and file path — that powers `fin plugs search`. It is
 - `python3 scripts/build_catalog.py --check` fails if the committed file is
   stale — CI runs this on every PR, so a plug change without a regenerated
   catalog cannot merge;
-- pushes to `master` regenerate and auto-commit it, so the raw URL always
-  serves a catalog matching the plugs on `master`.
+- every push to `master` regenerates the catalog and publishes it to GitHub
+  Releases twice: as a **new incremental patch version** (previous release
+  `1.1.2` → this build publishes `1.1.3`) and onto the rolling **`latest`**
+  release, whose `catalog.json` asset is always replaced. Publishing is
+  skipped when the catalog content hasn't changed.
+
+Version-pinned catalogs stay available forever at
+`releases/download/<version>/catalog.json`; `releases/download/latest/catalog.json`
+always serves the current one. The catalog only indexes — plug files are
+served from `master` (`files_base_url`), regardless of catalog version.
 
 ## Development workflow
 

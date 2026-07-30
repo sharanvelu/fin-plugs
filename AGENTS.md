@@ -120,8 +120,11 @@ CI (`.github/workflows/ci.yml`) runs on every push/PR: the suite across Python
 the declarative no-Docker rule, and the filename==name identity rule for every
 plug, and a **catalog** job: PRs run `scripts/build_catalog.py --check` (stale
 `catalog.json` fails the build); pushes to `master` regenerate the catalog and
-auto-commit it (`[skip ci]` guards against loops). Run the contract checks
-locally with `python3 -m pytest tests/test_plug_contracts.py`.
+publish it to GitHub Releases — a new incremental patch version (`1.1.2` →
+`1.1.3`) plus the rolling `latest` release whose asset is always replaced
+(skipped when the catalog is unchanged). Plug files are always served from
+the `master` branch, whatever catalog version is read. Run the contract
+checks locally with `python3 -m pytest tests/test_plug_contracts.py`.
 
 ## Gotchas
 

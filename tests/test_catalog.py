@@ -1,9 +1,9 @@
 """The committed catalog.json must always match the plugs on disk.
 
-``fin plugs search`` reads catalog.json straight from master by raw URL, so a
-stale catalog means wrong search results. CI enforces this with
-``scripts/build_catalog.py --check``; this test catches the same drift
-locally, before a push ever happens.
+``fin plugs search`` reads the catalog published to GitHub Releases from
+master builds, so a stale catalog means wrong search results. CI enforces
+this with ``scripts/build_catalog.py --check``; this test catches the same
+drift locally, before a push ever happens.
 """
 
 from __future__ import annotations

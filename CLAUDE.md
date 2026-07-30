@@ -25,8 +25,10 @@ tests — no packaging, no dependencies.
   (APP/ASSET/GLOBAL) is declared in-class via `plug_type`.
 - **`catalog.json` is generated, never hand-edited.** It powers
   `fin plugs search`; regenerate with `python3 scripts/build_catalog.py`
-  after any plug change (CI checks PRs with `--check` and auto-commits the
-  regenerated catalog on pushes to master).
+  after any plug change. CI checks PRs with `--check`; pushes to master
+  publish the catalog to GitHub Releases as the next patch version
+  (`1.1.2` → `1.1.3`) plus the rolling `latest` (asset always replaced).
+  Plug files are always served from the master branch (`files_base_url`).
 - **Assets are shared fixed-name containers** (`fin_mysql`, `fin_redis`, …)
   with credentials from `Config.ASSET_*` (`fin`/`password`) — never hardcoded.
 - **Declare env contracts with `env_spec()`** (`EnvSpec`/`EnvVar`); `fin up`

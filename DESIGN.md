@@ -37,16 +37,20 @@ That makes the install URL deterministic from the plug name alone:
 fin plugs install <name>
   → https://raw.githubusercontent.com/sharanvelu/fin-plugs/master/plugs/<name>.py
 fin plugs search <query>
-  → https://raw.githubusercontent.com/sharanvelu/fin-plugs/master/catalog.json
+  → https://github.com/sharanvelu/fin-plugs/releases/download/latest/catalog.json
 ```
 
 Renaming or moving a file under `plugs/` is therefore a **breaking change**
 for installs — plug filenames are public API. `catalog.json` (the search
 index: name, type, version, description, commands, file per plug) is generated
-by `scripts/build_catalog.py` and kept current by CI — checked on PRs,
-regenerated and auto-committed on pushes to `master` — and is never
-hand-edited. A plug's type is declared in-class (`plug_type`); the flat layout
-carries no type information.
+by `scripts/build_catalog.py` and never hand-edited. CI keeps it honest twice
+over: PRs fail if the committed copy drifts, and every push to `master`
+publishes the regenerated catalog to GitHub Releases — a new incremental
+patch version (`1.1.2` → `1.1.3`, pinned forever) plus the rolling `latest`
+release, whose asset is always replaced. The catalog only indexes: whichever
+catalog version a client reads, plug *files* are served from the `master`
+branch (the catalog's `files_base_url`). A plug's type is declared in-class
+(`plug_type`); the flat layout carries no type information.
 
 **The consequence — the import rule.** Because the embedded interpreter has no
 site-packages, a plug may import only:

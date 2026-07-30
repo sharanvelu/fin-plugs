@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Generate catalog.json — the machine-readable index of every plug.
 
-``fin plugs search`` fetches ``catalog.json`` from this repo's master branch
-by raw URL, so the file must always match the plugs on disk. CI regenerates
-it on every push to master and rejects PRs where it drifts; never hand-edit.
+``fin plugs search`` reads the catalog published on GitHub Releases (an
+incremental version per master build, plus the rolling ``latest`` whose asset
+is always replaced), so the file must always match the plugs on disk. CI
+publishes it on every push to master and rejects PRs where the committed copy
+drifts; never hand-edit. The plug *files* themselves are always served from
+the master branch — ``files_base_url`` records that base.
 
 Every ``plugs/<name>.py`` is loaded through the real fincli loader and
 described as::
@@ -22,13 +25,20 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import inspect
 import json
 import sys
 from pathlib import Path
 
-from fincli.plugs.base import PlugType
-from fincli.plugs.loader import load_plug_dir
+try:  # flat-layout fincli (fin-v2 in development)
+    from fincli.plugs.loader import load_plug_file as _loader_load
+except ImportError:  # released fincli: legacy dir loader with a type argument
+    from fincli.plugs.base import PlugType
+    from fincli.plugs.loader import load_plug_dir as _legacy_load
+
+    def _loader_load(py):
+        # The PlugType argument is a placeholder; the catalog entry records
+        # the declared instance.plug_type.
+        return _legacy_load(py.with_suffix(""), PlugType.APP)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGS_DIR = REPO_ROOT / "plugs"
@@ -36,22 +46,15 @@ CATALOG = REPO_ROOT / "catalog.json"
 
 SCHEMA_VERSION = 1
 
-#: Released fincli still takes a PlugType argument; flat-layout fincli
-#: doesn't (it trusts the declared ``instance.plug_type``). Support both
-#: during the transition.
-_LOADER_TAKES_TYPE = "plug_type" in inspect.signature(load_plug_dir).parameters
-
+#: Where each entry's ``file`` path resolves from. Installs always fetch plug
+#: files from the master branch, no matter which catalog release is read.
+FILES_BASE_URL = "https://raw.githubusercontent.com/sharanvelu/fin-plugs/master"
 
 def build_catalog() -> str:
     """Return the catalog JSON document for the plugs currently on disk."""
     entries = []
     for path in sorted(PLUGS_DIR.glob("*.py")):
-        # Where the loader still takes a PlugType it's a placeholder;
-        # the entry records the declared instance.plug_type.
-        if _LOADER_TAKES_TYPE:
-            lp = load_plug_dir(path.with_suffix(""), PlugType.APP)
-        else:
-            lp = load_plug_dir(path.with_suffix(""))
+        lp = _loader_load(path)
         if lp is None:
             sys.exit(f"error: {path.relative_to(REPO_ROOT)} failed to load — "
                      "fix the plug (see loader warning above) and rerun")
@@ -64,7 +67,11 @@ def build_catalog() -> str:
             "commands": sorted(inst.commands()),
             "file": f"plugs/{path.name}",
         })
-    document = {"schema_version": SCHEMA_VERSION, "plugs": entries}
+    document = {
+        "schema_version": SCHEMA_VERSION,
+        "files_base_url": FILES_BASE_URL,
+        "plugs": entries,
+    }
     return json.dumps(document, indent=2) + "\n"
 
 
