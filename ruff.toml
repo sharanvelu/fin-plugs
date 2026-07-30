@@ -1,0 +1,7 @@
+# Lint config for CI (astral-sh/ruff-action) and local runs.
+# The repo predates ruff enabling isort (I) by default; imports here are
+# deliberately one-per-line, so codify that instead of churning every file.
+
+[lint.isort]
+force-single-line = true
+known-first-party = ["fincli"]

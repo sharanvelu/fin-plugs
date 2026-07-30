@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "plugs": [
+    {
+      "name": "django",
+      "type": "APP",
+      "version": "1.0.0",
+      "description": "Django application runtime (python + runserver, live autoreload).",
+      "commands": [
+        "bash",
+        "collectstatic",
+        "createsuperuser",
+        "dbshell",
+        "makemigrations",
+        "manage",
+        "migrate",
+        "pip",
+        "python",
+        "shell",
+        "startapp",
+        "test"
+      ],
+      "file": "plugs/django.py"
+    },
+    {
+      "name": "laravel",
+      "type": "APP",
+      "version": "1.0.0",
+      "description": "Laravel / PHP application runtime (nginx + php-fpm + supervisord).",
+      "commands": [
+        "artisan",
+        "bash",
+        "bin",
+        "composer",
+        "make",
+        "migrate",
+        "php",
+        "phpunit",
+        "queue",
+        "seed",
+        "tinker"
+      ],
+      "file": "plugs/laravel.py"
+    },
+    {
+      "name": "minio",
+      "type": "ASSET",
+      "version": "1.0.0",
+      "description": "Shared Minio Object Storage Container.",
+      "commands": [],
+      "file": "plugs/minio.py"
+    },
+    {
+      "name": "mysql",
+      "type": "ASSET",
+      "version": "1.0.0",
+      "description": "Shared MySQL database container.",
+      "commands": [],
+      "file": "plugs/mysql.py"
+    },
+    {
+      "name": "postgres",
+      "type": "ASSET",
+      "version": "1.0.0",
+      "description": "Shared PostgreSQL database container.",
+      "commands": [],
+      "file": "plugs/postgres.py"
+    },
+    {
+      "name": "redis",
+      "type": "ASSET",
+      "version": "1.0.0",
+      "description": "Shared Redis container.",
+      "commands": [],
+      "file": "plugs/redis.py"
+    }
+  ]
+}
