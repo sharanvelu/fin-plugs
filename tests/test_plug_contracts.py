@@ -1,6 +1,6 @@
 """Repo-wide contract checks for every plug in this repository.
 
-These enforce the two invariants that nothing else catches:
+These enforce the invariants that nothing else catches:
 
 * **The import rule.** ``fincli`` ships as a compiled binary embedding its own
   interpreter and the standard library but NO site-packages, so a plug may
@@ -10,9 +10,14 @@ These enforce the two invariants that nothing else catches:
 * **The declarative rule.** Plugs describe containers; they never act. No
   ``docker`` import, no ``subprocess``, no reaching into Fin's Docker-mutating
   core modules.
+* **The install-URL rule.** ``fin plugs install <name>`` fetches
+  ``plugs/<name>.py`` from this repo by raw URL, so every plug is exactly one
+  lowercase file whose name equals the plug's declared ``name`` attribute,
+  holding exactly one ``FinPlug`` subclass, with its ``plug_type`` declared
+  in-class (the flat layout carries no type information).
 
-Plus discovery smoke checks: every plug directory actually loads through the
-real loader, and its declared identity matches its location on disk.
+Plus a discovery smoke check: every ``plugs/*.py`` file actually loads through
+the real loader.
 """
 
 from __future__ import annotations
@@ -23,10 +28,20 @@ from pathlib import Path
 
 import pytest
 
-from fincli.config import Config
-from fincli.plugs.loader import load_all
+from fincli.plugs.base import PlugType
+
+try:  # flat-layout fincli (fin-v2 in development)
+    from fincli.plugs.loader import load_plug_file as _loader_load
+except ImportError:  # released fincli: legacy dir loader with a type argument
+    from fincli.plugs.loader import load_plug_dir as _legacy_load
+
+    def _loader_load(py):
+        # The PlugType argument is a placeholder — assertions use the
+        # declared ``instance.plug_type``, never this value.
+        return _legacy_load(py.with_suffix(""), PlugType.APP)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+PLUGS_DIR = REPO_ROOT / "plugs"
 
 #: Modules a plug must never import, and why.
 BANNED_IMPORTS = {
@@ -38,41 +53,33 @@ BANNED_IMPORTS = {
 }
 
 
-def plug_packages() -> list[Path]:
-    """Every plug package dir (or single-file plug) under App/Asset/Global."""
-    found = []
-    for type_sub in Config.PLUG_TYPE_DIRS.values():
-        type_dir = REPO_ROOT / type_sub
-        if not type_dir.is_dir():
-            continue
-        for child in sorted(type_dir.iterdir()):
-            if child.name.startswith((".", "_")):
-                continue
-            if child.is_dir() or child.suffix == ".py":
-                found.append(child)
-    return found
-
-
 def plug_source_files() -> list[Path]:
-    """Every .py file belonging to a plug."""
-    files: list[Path] = []
-    for pkg in plug_packages():
-        files.extend(sorted(pkg.rglob("*.py")) if pkg.is_dir() else [pkg])
-    return files
+    """Every plug in the repo — one single file per plug: plugs/<name>.py."""
+    return sorted(PLUGS_DIR.glob("*.py"))
+
+
+def load_plug_file(path: Path):
+    """Load one plugs/<name>.py directly through the real loader.
+
+    Bridges the two fincli generations: flat-layout fincli's
+    ``load_plug_file`` and released fincli's legacy ``load_plug_dir``.
+    """
+    return _loader_load(path)
 
 
 def _imported_modules(tree: ast.AST):
     """Yield (module_path, lineno) for every import in *tree*, however nested.
 
     ``from a.b import c`` yields both ``a.b`` and ``a.b.c`` so bans work at
-    either granularity. Relative imports (within the plug package) are skipped.
+    either granularity. Relative imports are skipped (a single-file plug has
+    nothing to relatively import anyway).
     """
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 yield alias.name, node.lineno
         elif isinstance(node, ast.ImportFrom):
-            if node.level:  # relative import inside the plug package
+            if node.level:
                 continue
             module = node.module or ""
             yield module, node.lineno
@@ -80,7 +87,12 @@ def _imported_modules(tree: ast.AST):
                 yield f"{module}.{alias.name}", node.lineno
 
 
-_SOURCE_IDS = [str(p.relative_to(REPO_ROOT)) for p in plug_source_files()]
+_SOURCE_IDS = [p.name for p in plug_source_files()]
+
+
+def test_plugs_dir_is_not_empty():
+    """Guard the suite itself: an empty plugs/ would silently skip everything."""
+    assert plug_source_files(), f"no plugs found under {PLUGS_DIR}"
 
 
 @pytest.mark.parametrize("path", plug_source_files(), ids=_SOURCE_IDS)
@@ -113,28 +125,48 @@ def test_plug_never_touches_docker(path):
     assert not offenders, f"{path.relative_to(REPO_ROOT)}: {sorted(set(offenders))}"
 
 
-def test_every_plug_loads_through_the_real_loader(monkeypatch):
-    """No plug silently drops out of discovery (bad import, no FinPlug subclass, …)."""
-    monkeypatch.setattr(Config, "PLUGS_DIR", REPO_ROOT)
-    loaded = {lp.name: lp for lp in load_all()}
-    expected = {pkg.stem for pkg in plug_packages()}
-    missing = expected - set(loaded)
-    assert not missing, (
-        f"Plug dirs exist but failed to load (see loader warnings above): {sorted(missing)}"
+@pytest.mark.parametrize("path", plug_source_files(), ids=_SOURCE_IDS)
+def test_exactly_one_finplug_subclass_per_file(path):
+    """One installable unit per file: exactly one class extending FinPlug."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    classes = [
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, ast.ClassDef)
+        and any(
+            (isinstance(base, ast.Name) and base.id == "FinPlug")
+            or (isinstance(base, ast.Attribute) and base.attr == "FinPlug")
+            for base in node.bases
+        )
+    ]
+    assert len(classes) == 1, (
+        f"{path.name} must define exactly one FinPlug subclass, found: {classes}"
     )
 
 
-def test_plug_identity_matches_location(monkeypatch):
-    """Declared name == directory name; declared plug_type == type directory."""
-    monkeypatch.setattr(Config, "PLUGS_DIR", REPO_ROOT)
-    for lp in load_all():
-        assert lp.instance.name == lp.path.stem, (
-            f"plug at {lp.path.name}/ declares name={lp.instance.name!r}"
-        )
-        expected_dir = Config.PLUG_TYPE_DIRS[lp.instance.plug_type.value]
-        assert lp.path.parent.name == expected_dir, (
-            f"{lp.name} declares {lp.instance.plug_type.value} but lives in "
-            f"{lp.path.parent.name}/"
-        )
-        assert lp.instance.version, f"{lp.name} has an empty version"
-        assert lp.instance.description, f"{lp.name} has an empty description"
+def test_every_plug_loads_through_the_real_loader():
+    """No plug silently drops out (bad import, no FinPlug subclass, …)."""
+    failures = [p.name for p in plug_source_files() if load_plug_file(p) is None]
+    assert not failures, (
+        f"Plug files exist but failed to load (see loader warnings above): {failures}"
+    )
+
+
+@pytest.mark.parametrize("path", plug_source_files(), ids=_SOURCE_IDS)
+def test_plug_identity_matches_filename(path):
+    """The install-URL contract: plugs/<name>.py is fetched by declared name."""
+    assert path.stem == path.stem.lower(), (
+        f"{path.name}: plug filenames must be lowercase (they become install URLs)"
+    )
+    lp = load_plug_file(path)
+    assert lp is not None, f"{path.name} failed to load"
+    inst = lp.instance
+    assert inst.name == path.stem, (
+        f"{path.name} declares name={inst.name!r} — filename and declared name "
+        f"must match, or `fin plugs install {inst.name}` fetches the wrong file"
+    )
+    assert isinstance(inst.plug_type, PlugType), (
+        f"{path.name} declares invalid plug_type={inst.plug_type!r}"
+    )
+    assert inst.version, f"{path.name} has an empty version"
+    assert inst.description, f"{path.name} has an empty description"

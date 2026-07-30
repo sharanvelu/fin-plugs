@@ -17,55 +17,93 @@ orchestrator acts on its behalf.
 ## Layout
 
 ```
-App/          primary application runtimes (one per project, PlugType.APP)
-  laravel/    Laravel / PHP (nginx + php-fpm + supervisord image)
-  django/     Django (python:<ver>-slim + runserver, live autoreload)
-Asset/        shared services, one fixed-name container across all projects
-  mysql/      fin_mysql    — mysql:8.0
-  postgres/   fin_postgres — postgres:16-alpine
-  redis/      fin_redis    — redis:7-alpine
-  minio/      fin_minio    — quay.io/minio/minio (S3-compatible object store)
-Global/       project-independent plugs (currently empty)
-tests/        pytest suite exercising the real plugs above
+plugs/          every plug — one file each; the filename IS the plug name
+  laravel.py    APP   — Laravel / PHP (nginx + php-fpm + supervisord image)
+  django.py     APP   — Django (python:<ver>-slim + runserver, live autoreload)
+  mysql.py      ASSET — fin_mysql    — mysql:8.0
+  postgres.py   ASSET — fin_postgres — postgres:16-alpine
+  redis.py      ASSET — fin_redis    — redis:7-alpine
+  minio.py      ASSET — fin_minio    — quay.io/minio/minio (S3-compatible)
+catalog.json    machine-readable plug index (CI-generated — never hand-edit)
+scripts/        build_catalog.py — regenerates and validates catalog.json
+tests/          pytest suite exercising the real plugs above
 ```
 
-Each plug is a package directory with an `__init__.py` defining exactly one
-class that subclasses `fincli.plugs.base.FinPlug`.
+Each plug is a **single lowercase file** defining exactly one class that
+subclasses `fincli.plugs.base.FinPlug`. The declared `name` attribute must
+equal the filename, and the plug's type (APP / ASSET / GLOBAL) is declared
+in-class via `plug_type` — the layout carries no type information.
 
-## Installing plugs on a host
+## Installing plugs — the raw-URL contract
 
-At runtime Fin loads plugs from `PLUGS_DIR`, fixed at `~/.fin/plugs` (it moves
-with `FIN_DATA_DIR`), grouped into `App/`, `Asset/`, and `Global/`. To install,
-place or symlink plug directories there:
+`fin plugs install <name>` downloads exactly one file over plain HTTPS:
 
-```bash
-# a single plug
-cp -r App/laravel ~/.fin/plugs/App/laravel
-
-# or the whole library (recommended for development):
-ln -s "$PWD" ~/.fin/plugs
+```
+https://raw.githubusercontent.com/sharanvelu/fin-plugs/master/plugs/<name>.py
 ```
 
-Verify with `fin plugs list` — every plug should show as loaded. A broken plug
-logs a warning and is skipped; it never crashes Fin.
+The URL is derived from the plug name alone — that is why the layout is flat
+and every filename is lowercase and equal to the plug's declared `name`.
+**Renaming or moving a file under `plugs/` is a breaking change** for everyone
+installing that plug: treat plug filenames as public API.
+
+`fin plugs search <query>` reads [`catalog.json`](catalog.json), published on
+GitHub Releases (see below):
+
+```
+https://github.com/sharanvelu/fin-plugs/releases/download/latest/catalog.json
+```
+
+Whichever catalog version is read, plug files themselves are always fetched
+from the `master` branch — the catalog's `files_base_url` records that base.
+
+Installed plugs land in `PLUGS_DIR`, fixed at `~/.fin/plugs` (it moves with
+`FIN_DATA_DIR`). A broken plug logs a warning and is skipped; it never crashes
+Fin. Verify with `fin plugs list`.
+
+## catalog.json
+
+The machine-readable index of every plug — name, type, version, description,
+command names, and file path — that powers `fin plugs search`. It is
+**generated, never hand-edited**:
+
+- `python3 scripts/build_catalog.py` regenerates it (deterministic output —
+  regeneration is a no-op when nothing changed);
+- `python3 scripts/build_catalog.py --check` fails if the committed file is
+  stale — CI runs this on every PR, so a plug change without a regenerated
+  catalog cannot merge;
+- every push to `master` regenerates the catalog and publishes it to GitHub
+  Releases twice: as a **new incremental patch version** (previous release
+  `1.1.2` → this build publishes `1.1.3`) and onto the rolling **`latest`**
+  release, whose `catalog.json` asset is always replaced. Publishing is
+  skipped when the catalog content hasn't changed.
+
+Version-pinned catalogs stay available forever at
+`releases/download/<version>/catalog.json`; `releases/download/latest/catalog.json`
+always serves the current one. The catalog only indexes — plug files are
+served from `master` (`files_base_url`), regardless of catalog version.
 
 ## Development workflow
+
+> **Transitional limitation:** the released `fincli` binary still discovers
+> plugs only under the old `App/`/`Asset/`/`Global/` type directories, so
+> symlinking this repo into `~/.fin/plugs` no longer works. Until fin-v2
+> ships flat-layout support (the dev setup then becomes
+> `ln -s "$PWD/plugs" ~/.fin/plugs`), the plugs here are exercised through
+> the test suite.
 
 ```bash
 git clone <this-repo> && cd fin-plugs
 
-# 1. Point Fin at your working tree (once):
-ln -s "$PWD" ~/.fin/plugs
-
-# 2. Make fincli importable for your IDE and the tests (no venv):
+# 1. Make fincli importable for your IDE and the tests (no venv):
 python3 -m pip install --user -e /Users/sharan/Projects/05-DockR/fin-v2
 
-# 3. Run the tests:
+# 2. Run the tests:
 python3 -m pytest
-```
 
-Edits are live immediately — Fin re-imports plugs from disk on every
-invocation.
+# 3. After adding or changing a plug, regenerate the catalog:
+python3 scripts/build_catalog.py
+```
 
 ## The import rule (important)
 
@@ -97,7 +135,8 @@ belongs *inside the container* the plug describes, not in the plug itself.
 
 See [AGENTS.md](AGENTS.md) for the step-by-step guide and
 [DESIGN.md](DESIGN.md) for how plugs integrate with the tool. In short: create
-`{App|Asset|Global}/<name>/__init__.py`, subclass `FinPlug`, declare your env
-contract with `env_spec()`, return `ContainerSpec`s from `primary_spec()` /
-`asset_specs()`, and delegate command handlers to `ctx.exec(...)`. Describe,
-never act.
+`plugs/<name>.py` (lowercase, equal to the class's declared `name`), subclass
+`FinPlug`, declare your env contract with `env_spec()`, return
+`ContainerSpec`s from `primary_spec()` / `asset_specs()`, delegate command
+handlers to `ctx.exec(...)`, and regenerate `catalog.json`. Describe, never
+act.

@@ -17,17 +17,40 @@ runtime by the binary's embedded interpreter.
 ```
 ┌──────────────────────────────┐        ┌──────────────────────────────┐
 │  fin binary (immutable)      │        │  ~/.fin/plugs (writable)     │
-│  ├─ embedded Python + stdlib │  file- │  ├─ App/{laravel,django}     │
-│  ├─ fincli package           │  path  │  ├─ Asset/{mysql,postgres,   │
-│  └─ NO site-packages         │ import │  │        redis,minio}       │
-│                              │ ─────► │  └─ Global/                  │
+│  ├─ embedded Python + stdlib │  file- │  ├─ laravel.py    django.py  │
+│  ├─ fincli package           │  path  │  ├─ mysql.py      postgres.py│
+│  └─ NO site-packages         │ import │  ├─ redis.py      minio.py   │
+│                              │ ─────► │  └─ …one file per plug       │
 └──────────────────────────────┘        └──────────────────────────────┘
 ```
 
 **Why.** The tool stays a single immutable artifact that can be updated
-atomically, while plugs remain user-serviceable text: installable by copying a
-directory, editable in place, hackable without a toolchain. This repo is that
-writable half.
+atomically, while plugs remain user-serviceable text: installable by fetching
+a single file, editable in place, hackable without a toolchain. This repo is
+that writable half.
+
+**Distribution — the raw-URL contract.** Every plug is exactly one lowercase
+file, `plugs/<name>.py`, whose filename equals the class's declared `name`.
+That makes the install URL deterministic from the plug name alone:
+
+```
+fin plugs install <name>
+  → https://raw.githubusercontent.com/sharanvelu/fin-plugs/master/plugs/<name>.py
+fin plugs search <query>
+  → https://github.com/sharanvelu/fin-plugs/releases/download/latest/catalog.json
+```
+
+Renaming or moving a file under `plugs/` is therefore a **breaking change**
+for installs — plug filenames are public API. `catalog.json` (the search
+index: name, type, version, description, commands, file per plug) is generated
+by `scripts/build_catalog.py` and never hand-edited. CI keeps it honest twice
+over: PRs fail if the committed copy drifts, and every push to `master`
+publishes the regenerated catalog to GitHub Releases — a new incremental
+patch version (`1.1.2` → `1.1.3`, pinned forever) plus the rolling `latest`
+release, whose asset is always replaced. The catalog only indexes: whichever
+catalog version a client reads, plug *files* are served from the `master`
+branch (the catalog's `files_base_url`). A plug's type is declared in-class
+(`plug_type`); the flat layout carries no type information.
 
 **The consequence — the import rule.** Because the embedded interpreter has no
 site-packages, a plug may import only:
@@ -60,7 +83,7 @@ data: trivially testable with no daemon, which is exactly what `tests/` does.
 
 ```python
 class MyPlug(FinPlug):
-    name = "myplug"           # unique; keep equal to the directory name
+    name = "myplug"           # unique; MUST equal the filename (plugs/myplug.py)
     version = "1.0.0"
     plug_type = PlugType.APP  # APP | ASSET | GLOBAL
     description = "…"
@@ -95,7 +118,7 @@ container and refresh its trust store. Defaults target Debian-family images
 `cert_update_cmd=["update-ca-certificates"]`); override both for other
 families (RHEL: `/etc/pki/ca-trust/source/anchors` +
 `["update-ca-trust", "extract"]`). Best-effort and idempotent — a cert problem
-never fails the up. The laravel plug opts in; see `App/laravel/__init__.py`.
+never fails the up. The laravel plug opts in; see `plugs/laravel.py`.
 
 ### `PlugCommand` + `PlugContext` — how commands execute
 
@@ -137,27 +160,35 @@ Inside `primary_spec` the plugs still read defensively
 `None`, and they degrade rather than crash on junk (see the django plug's
 `_safe_port`).
 
-## 4. The loader: file-path imports over a directory tree
+## 4. The loader: file-path imports over flat files
 
-`fin-v2/fincli/plugs/loader.py` discovers plugs from
-`Config.PLUGS_DIR = ~/.fin/plugs` (moves with `FIN_DATA_DIR`), grouped by type
-directory — `App/`, `Asset/`, `Global/` (`Config.PLUG_TYPE_DIRS`). For each
-package directory it:
+`fin-v2/fincli/plugs/loader.py` loads plugs from
+`Config.PLUGS_DIR = ~/.fin/plugs` (moves with `FIN_DATA_DIR`). This repo's
+layout is flat — one `plugs/<name>.py` per plug — and for each file the
+loader:
 
-1. imports `__init__.py` **by file path**
-   (`importlib.util.spec_from_file_location`) under the synthetic module name
-   `fin_plug_<TypeDir>_<name>` — plugs are not on `sys.path` and cannot be
+1. imports it **by file path**
+   (`importlib.util.spec_from_file_location`) under a synthetic
+   `fin_plug_*` module name — plugs are not on `sys.path` and cannot be
    imported by package name;
 2. picks the single class subclassing `FinPlug` *defined in that module*
    (imported classes are ignored — importing `FinPlug` itself doesn't count);
-3. instantiates it and calls `setup()`.
+3. instantiates it and calls `setup()`. The instance's declared `plug_type`
+   is authoritative — nothing about the file's location implies a type.
 
 Any failure at any step logs a warning and skips that plug — one broken plug
 never crashes Fin. Entries starting with `.` or `_` are ignored (so
-`__pycache__/` is harmless); a bare `<name>.py` also works as a single-file
-plug. The SQLite registry (`~/.fin/registry.db`) is only a cache over this
-tree, re-synced by `fin plugs list` — the directory layout is the source of
-truth.
+`__pycache__/` is harmless). The SQLite registry (`~/.fin/registry.db`) is
+only a cache over the plug files, re-synced by `fin plugs list` — the files
+are the source of truth.
+
+**Transitional note.** The *released* fincli still discovers plugs only under
+the legacy `App/`/`Asset/`/`Global/` type directories
+(`Config.PLUG_TYPE_DIRS`) and its `load_plug_dir` takes the type from the
+directory. Until fin-v2 ships flat-layout discovery, this repo cannot be
+symlinked into `~/.fin/plugs`; the tests and `scripts/build_catalog.py` load
+each file directly through the loader's single-file path instead (and adapt
+to either `load_plug_dir` signature).
 
 ## 5. App vs Asset in practice
 
@@ -179,16 +210,14 @@ volume, and credentials from `Config.ASSET_USERNAME`/`ASSET_PASSWORD`/
 values by design; `fin up` auto-creates each project's `DB_DATABASE` inside
 the shared engine). Assets are isolated by database, not by container.
 
-**GLOBAL plugs** contribute project-independent commands; there are none yet
-(`Global/` is kept as an empty tree).
+**GLOBAL plugs** contribute project-independent commands; there are none yet.
 
 ## 6. Testing model
 
 `tests/test_bundled_plugs.py` exercises the **real** plugs in this repo by
-pointing `Config.PLUGS_DIR` at the repo root and loading through the real
-loader (`load_by_name`) — so the tests cover discovery, the class contract,
-env specs, container specs, and command wiring exactly as `fin up` would see
-them. Because plugs are declarative, no Docker daemon is involved: handler
+loading each `plugs/<name>.py` through the real loader's single-file path
+(`load_plug_dir`) — so the tests cover the class contract, env specs,
+container specs, and command wiring exactly as `fin up` would see them. Because plugs are declarative, no Docker daemon is involved: handler
 tests substitute a `FakeCtx` recording `ctx.exec` calls and assert the exact
 command, workdir, and interactivity delegated. Autouse fixtures in
 `tests/conftest.py` (mirrored from `fin-v2/tests/conftest.py`) re-point
