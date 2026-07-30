@@ -23,6 +23,7 @@ the real loader.
 from __future__ import annotations
 
 import ast
+import inspect
 import sys
 from pathlib import Path
 
@@ -33,6 +34,11 @@ from fincli.plugs.loader import load_plug_dir
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGS_DIR = REPO_ROOT / "plugs"
+
+#: Released fincli still takes a PlugType argument; flat-layout fincli
+#: doesn't (it trusts the declared ``instance.plug_type``). Support both
+#: during the transition.
+_LOADER_TAKES_TYPE = "plug_type" in inspect.signature(load_plug_dir).parameters
 
 #: Modules a plug must never import, and why.
 BANNED_IMPORTS = {
@@ -52,12 +58,14 @@ def plug_source_files() -> list[Path]:
 def load_plug_file(path: Path):
     """Load one plugs/<name>.py through the loader's single-file path.
 
-    fin-v2's tree discovery (``load_all``/``load_by_name``) still walks the
-    old App/Asset/Global layout, so each file is loaded directly. The PlugType
-    argument is a placeholder the signature requires — assertions use the
-    *declared* ``instance.plug_type``, never this value.
+    Loads each file directly rather than relying on discovery, which released
+    fincli only does for the old App/Asset/Global tree. Where the loader still
+    takes a PlugType, it's a placeholder — assertions use the *declared*
+    ``instance.plug_type``, never this value.
     """
-    return load_plug_dir(path.with_suffix(""), PlugType.APP)
+    if _LOADER_TAKES_TYPE:
+        return load_plug_dir(path.with_suffix(""), PlugType.APP)
+    return load_plug_dir(path.with_suffix(""))
 
 
 def _imported_modules(tree: ast.AST):

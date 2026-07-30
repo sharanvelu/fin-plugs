@@ -6,6 +6,7 @@ These load the *real* plugs in this repository, exercising the plug contracts
 
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 
 import pytest
@@ -19,16 +20,23 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 #: Every bundled plug is a single file: plugs/<name>.py.
 PLUGS_DIR = REPO_ROOT / "plugs"
 
+#: Released fincli still takes a PlugType argument; flat-layout fincli
+#: doesn't (it trusts the declared ``instance.plug_type``). Support both
+#: during the transition.
+_LOADER_TAKES_TYPE = "plug_type" in inspect.signature(load_plug_dir).parameters
+
 
 def load_plug(name: str):
     """Load ``plugs/<name>.py`` through the loader's single-file path.
 
-    fin-v2's tree discovery (``load_all``/``load_by_name``) still walks the
-    old App/Asset/Global layout, so tests load each file directly. The
-    PlugType argument is a placeholder the signature requires — assertions
-    use the *declared* ``instance.plug_type``, never this value.
+    Loads the file directly rather than relying on discovery, which released
+    fincli only does for the old App/Asset/Global tree. Where the loader still
+    takes a PlugType, it's a placeholder — assertions use the *declared*
+    ``instance.plug_type``, never this value.
     """
-    return load_plug_dir(PLUGS_DIR / name, PlugType.APP)
+    if _LOADER_TAKES_TYPE:
+        return load_plug_dir(PLUGS_DIR / name, PlugType.APP)
+    return load_plug_dir(PLUGS_DIR / name)
 
 
 def _env(tmp_path, **values):
