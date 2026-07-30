@@ -1,0 +1,45 @@
+# Enforce Conventional Commits on PR titles. With squash-merge the PR title
+# becomes the commit message on master, so this keeps history machine-parseable
+# (and lets Dependabot's "chore(deps): ..." titles pass unchanged).
+#
+# Required status check: "PR Title Lint". Not path-filtered and no gate job —
+# it is cheap and must run on every PR. `edited` is in the trigger list so
+# fixing the title re-runs the check.
+
+name: pr title
+
+on:
+  pull_request:
+    types: [opened, edited, reopened, synchronize]
+    branches: [master]
+
+permissions: {}
+
+concurrency:
+  group: pr-title-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: PR Title Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    steps:
+      - uses: amannn/action-semantic-pull-request@48f256284bd46cdaab1048c3721360e808335d50 # v6.1.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+          requireScope: false

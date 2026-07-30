@@ -1,6 +1,7 @@
 # fin-plugs
 
-[![CI](https://github.com/sharanvelu/fin-plugs/actions/workflows/ci.yml/badge.svg)](https://github.com/sharanvelu/fin-plugs/actions/workflows/ci.yml)
+[![tests](https://github.com/sharanvelu/fin-plugs/actions/workflows/tests.yml/badge.svg)](https://github.com/sharanvelu/fin-plugs/actions/workflows/tests.yml)
+[![catalog release](https://github.com/sharanvelu/fin-plugs/actions/workflows/catalog-release.yml/badge.svg)](https://github.com/sharanvelu/fin-plugs/actions/workflows/catalog-release.yml)
 
 > The plug library for [Fin](https://github.com/sharanvelu/fin) — declarative
 > container recipes for local development.

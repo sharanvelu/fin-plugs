@@ -53,6 +53,9 @@ fin-v2 ships flat-layout support (then: `ln -s "$PWD/plugs" ~/.fin/plugs`).
 
 - **[AGENTS.md](AGENTS.md)** — layout, conventions, how to add a plug, test
   fixtures, gotchas.
+- **[.github/CI.md](.github/CI.md)** — the CI architecture (changes → work →
+  gate per domain; only gates are required checks) and the catalog release
+  flow.
 - **[DESIGN.md](DESIGN.md)** — how plugs integrate with fincli: the declarative
   contract, the file-path loader, the compiled-binary model and import rule,
   the raw-URL install contract and catalog, `install_certs`, the env-spec

@@ -1,4 +1,5 @@
 """Shared Redis asset plug (fixed name ``fin_redis``)."""
+
 from __future__ import annotations
 
 from fincli.plugs.base import ContainerSpec
@@ -20,12 +21,7 @@ class RedisPlug(FinPlug):
                 service="redis",
                 image="redis:7-alpine",
                 container_name="fin_redis",
-                ports=[
-                    PortMapping(
-                        container=6379,
-                        host=6379)],
-                volumes=[
-                    VolumeMount(
-                        host="fin_asset_redis",
-                        container="/data")],
-            )]
+                ports=[PortMapping(container=6379, host=6379)],
+                volumes=[VolumeMount(host="fin_asset_redis", container="/data")],
+            )
+        ]

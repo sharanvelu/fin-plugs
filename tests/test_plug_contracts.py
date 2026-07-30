@@ -40,6 +40,7 @@ except ImportError:  # released fincli: legacy dir loader with a type argument
         # declared ``instance.plug_type``, never this value.
         return _legacy_load(py.with_suffix(""), PlugType.APP)
 
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGS_DIR = REPO_ROOT / "plugs"
 

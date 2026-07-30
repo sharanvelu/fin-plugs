@@ -1,4 +1,5 @@
 """Shared Postgres asset plug (fixed name ``fin_postgres``)."""
+
 from __future__ import annotations
 
 from fincli.config import Config
@@ -26,12 +27,11 @@ class PostgresPlug(FinPlug):
                     "POSTGRES_PASSWORD": Config.ASSET_PASSWORD,
                     "POSTGRES_DB": Config.ASSET_DEFAULT_DATABASE,
                 },
-                ports=[
-                    PortMapping(
-                        container=5432,
-                        host=5432)],
+                ports=[PortMapping(container=5432, host=5432)],
                 volumes=[
                     VolumeMount(
-                        host="fin_asset_postgres",
-                        container="/var/lib/postgresql/data")],
-            )]
+                        host="fin_asset_postgres", container="/var/lib/postgresql/data"
+                    )
+                ],
+            )
+        ]

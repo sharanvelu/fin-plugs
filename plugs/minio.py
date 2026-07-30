@@ -4,6 +4,7 @@ One Minio container shared across every Fin project (fixed name ``fin_minio``),
 so multiple projects can use the same object store server. Credentials come from
 Fin's system config (``Config.ASSET_*``).
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -38,8 +39,11 @@ class MinioPlug(FinPlug):
                     PortMapping(container=9001, host=9001),
                 ],
                 volumes=[
-                    VolumeMount(host=f"{Path.home()}/Documents/minio/data", container="/data")
+                    VolumeMount(
+                        host=f"{Path.home()}/Documents/minio/data", container="/data"
+                    )
                 ],
                 web_exposed=True,
                 web_port=9001,
-            )]
+            )
+        ]

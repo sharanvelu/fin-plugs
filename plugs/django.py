@@ -27,6 +27,7 @@ Django 4.1 supports Python ≤ 3.11, not 3.12).
 The plug is declarative: command handlers ask the :class:`PlugContext` to exec
 inside the running primary container; they never touch Docker directly.
 """
+
 from __future__ import annotations
 
 from fincli.core.env import EnvSpec
@@ -47,11 +48,21 @@ PIP_CACHE_DIR = "/root/.cache/pip"
 _INTERACTIVE_MANAGE = {"shell", "dbshell", "createsuperuser", "changepassword"}
 
 #: Fin's own control variables — not forwarded into the app container's env.
-_FIN_CONTROL_VARS = frozenset({
-    "FIN_APP", "FIN_PLUG", "FIN_PLUGS", "FIN_SITE", "FIN_PYTHON_VERSION",
-    "FIN_DJANGO_PORT", "FIN_REQUIREMENTS", "FIN_APT_PACKAGES",
-    "FIN_DOCKER_IMAGE", "FIN_CONTAINER_NAME", "FIN_OVERRIDE_ASSETS",
-})
+_FIN_CONTROL_VARS = frozenset(
+    {
+        "FIN_APP",
+        "FIN_PLUG",
+        "FIN_PLUGS",
+        "FIN_SITE",
+        "FIN_PYTHON_VERSION",
+        "FIN_DJANGO_PORT",
+        "FIN_REQUIREMENTS",
+        "FIN_APT_PACKAGES",
+        "FIN_DOCKER_IMAGE",
+        "FIN_CONTAINER_NAME",
+        "FIN_OVERRIDE_ASSETS",
+    }
+)
 
 
 def _safe_port(value: str | None, default: int = 8000) -> int:
@@ -70,48 +81,52 @@ class DjangoPlug(FinPlug):
 
     # --- env contract -------------------------------------------------------
     def env_spec(self) -> EnvSpec:
-        return EnvSpec.of([
-            EnvVar(
-                "FIN_SITE",
-                required=True,
-                description="hostname the app is served at (e.g. myapp.localhost)",
-            ),
-            EnvVar(
-                "FIN_PYTHON_VERSION",
-                required=False,
-                default="3.12",
-                description="Python image tag (e.g. 3.12, 3.11, 3.13)",
-            ),
-            EnvVar(
-                "FIN_DJANGO_PORT",
-                required=False,
-                value_type=int,
-                default="8000",
-                description="Port runserver binds inside the container",
-            ),
-            EnvVar(
-                "FIN_REQUIREMENTS",
-                required=False,
-                default="requirements.txt",
-                description="Requirements file installed on container start",
-            ),
-            EnvVar(
-                "FIN_APT_PACKAGES",
-                required=False,
-                default="",
-                description=(
-                    "Space-separated apt packages to install before pip "
-                    "(for native deps, e.g. 'build-essential libpq-dev')"
+        return EnvSpec.of(
+            [
+                EnvVar(
+                    "FIN_SITE",
+                    required=True,
+                    description="hostname the app is served at (e.g. myapp.localhost)",
                 ),
-            ),
-        ])
+                EnvVar(
+                    "FIN_PYTHON_VERSION",
+                    required=False,
+                    default="3.12",
+                    description="Python image tag (e.g. 3.12, 3.11, 3.13)",
+                ),
+                EnvVar(
+                    "FIN_DJANGO_PORT",
+                    required=False,
+                    value_type=int,
+                    default="8000",
+                    description="Port runserver binds inside the container",
+                ),
+                EnvVar(
+                    "FIN_REQUIREMENTS",
+                    required=False,
+                    default="requirements.txt",
+                    description="Requirements file installed on container start",
+                ),
+                EnvVar(
+                    "FIN_APT_PACKAGES",
+                    required=False,
+                    default="",
+                    description=(
+                        "Space-separated apt packages to install before pip "
+                        "(for native deps, e.g. 'build-essential libpq-dev')"
+                    ),
+                ),
+            ]
+        )
 
     # --- primary container --------------------------------------------------
     def primary_spec(self, env) -> ContainerSpec:
         py_version = env.get("FIN_PYTHON_VERSION", "3.12") or "3.12"
         image = env.get("FIN_DOCKER_IMAGE") or f"python:{py_version}-slim"
         port = _safe_port(env.get("FIN_DJANGO_PORT", "8000"))
-        requirements = env.get("FIN_REQUIREMENTS", "requirements.txt") or "requirements.txt"
+        requirements = (
+            env.get("FIN_REQUIREMENTS", "requirements.txt") or "requirements.txt"
+        )
         apt_packages = (env.get("FIN_APT_PACKAGES", "") or "").strip()
 
         # Startup (runs once per container create): optionally apt-install system
@@ -122,7 +137,7 @@ class DjangoPlug(FinPlug):
         steps = ["set -e"]
         if apt_packages:
             steps.append(
-                'apt-get update '
+                "apt-get update "
                 "&& apt-get install -y --no-install-recommends ${FIN_APT_PACKAGES} "
                 "&& rm -rf /var/lib/apt/lists/*"
             )
@@ -140,13 +155,15 @@ class DjangoPlug(FinPlug):
         environment = {
             k: v for k, v in env.values.items() if k not in _FIN_CONTROL_VARS
         }
-        environment.update({
-            "FIN_CONTAINER_TYPE": "web",
-            "PYTHONUNBUFFERED": "1",        # stream runserver output to `fin logs`
-            "PYTHONDONTWRITEBYTECODE": "1",  # don't litter the mounted volume with .pyc
-            "PIP_CACHE_DIR": PIP_CACHE_DIR,
-            "FIN_APT_PACKAGES": apt_packages,
-        })
+        environment.update(
+            {
+                "FIN_CONTAINER_TYPE": "web",
+                "PYTHONUNBUFFERED": "1",  # stream runserver output to `fin logs`
+                "PYTHONDONTWRITEBYTECODE": "1",  # don't litter the mounted volume with .pyc
+                "PIP_CACHE_DIR": PIP_CACHE_DIR,
+                "FIN_APT_PACKAGES": apt_packages,
+            }
+        )
         return ContainerSpec(
             service="web",
             image=image,
@@ -167,65 +184,44 @@ class DjangoPlug(FinPlug):
     def commands(self):
         return {
             "manage": PlugCommand(
-                "manage",
-                _manage,
-                "Run a manage.py command (passthrough)."),
-            "migrate": PlugCommand(
-                "migrate",
-                _migrate,
-                "Apply database migrations."),
+                "manage", _manage, "Run a manage.py command (passthrough)."
+            ),
+            "migrate": PlugCommand("migrate", _migrate, "Apply database migrations."),
             "makemigrations": PlugCommand(
                 "makemigrations",
                 _makemigrations,
                 "Create new migrations from model changes.",
-                aliases=(
-                    "mm",
-                )),
+                aliases=("mm",),
+            ),
             "shell": PlugCommand(
-                "shell",
-                _shell,
-                "Open the Django shell (interactive)."),
+                "shell", _shell, "Open the Django shell (interactive)."
+            ),
             "dbshell": PlugCommand(
-                "dbshell",
-                _dbshell,
-                "Open the database shell (interactive)."),
+                "dbshell", _dbshell, "Open the database shell (interactive)."
+            ),
             "createsuperuser": PlugCommand(
                 "createsuperuser",
                 _createsuperuser,
                 "Create a Django superuser (interactive).",
-                aliases=(
-                    "csu",
-                )),
+                aliases=("csu",),
+            ),
             "collectstatic": PlugCommand(
-                "collectstatic",
-                _collectstatic,
-                "Collect static files."),
-            "test": PlugCommand(
-                "test",
-                _test,
-                "Run the Django test suite."),
+                "collectstatic", _collectstatic, "Collect static files."
+            ),
+            "test": PlugCommand("test", _test, "Run the Django test suite."),
             "startapp": PlugCommand(
-                "startapp",
-                _startapp,
-                "Scaffold a new Django app."),
-            "pip": PlugCommand(
-                "pip",
-                _pip,
-                "Run pip in the container."),
+                "startapp", _startapp, "Scaffold a new Django app."
+            ),
+            "pip": PlugCommand("pip", _pip, "Run pip in the container."),
             "python": PlugCommand(
                 "python",
                 _python,
                 "Run python (REPL when given no args).",
-                aliases=(
-                    "py",
-                )),
+                aliases=("py",),
+            ),
             "bash": PlugCommand(
-                "bash",
-                _bash,
-                "Open a shell in the container.",
-                aliases=(
-                    "sh",
-                )),
+                "bash", _bash, "Open a shell in the container.", aliases=("sh",)
+            ),
         }
 
 
@@ -234,8 +230,9 @@ class DjangoPlug(FinPlug):
 def _manage(ctx: PlugContext, args: list[str]) -> int:
     # Some manage.py subcommands prompt for input; attach stdin for those.
     interactive = bool(args) and args[0] in _INTERACTIVE_MANAGE
-    return ctx.exec(["python", "manage.py", *args],
-                    workdir=WORKDIR, interactive=interactive)
+    return ctx.exec(
+        ["python", "manage.py", *args], workdir=WORKDIR, interactive=interactive
+    )
 
 
 def _migrate(ctx: PlugContext, args: list[str]) -> int:
@@ -247,18 +244,23 @@ def _makemigrations(ctx: PlugContext, args: list[str]) -> int:
 
 
 def _shell(ctx: PlugContext, args: list[str]) -> int:
-    return ctx.exec(["python", "manage.py", "shell", *args],
-                    workdir=WORKDIR, interactive=True)
+    return ctx.exec(
+        ["python", "manage.py", "shell", *args], workdir=WORKDIR, interactive=True
+    )
 
 
 def _dbshell(ctx: PlugContext, args: list[str]) -> int:
-    return ctx.exec(["python", "manage.py", "dbshell", *args],
-                    workdir=WORKDIR, interactive=True)
+    return ctx.exec(
+        ["python", "manage.py", "dbshell", *args], workdir=WORKDIR, interactive=True
+    )
 
 
 def _createsuperuser(ctx: PlugContext, args: list[str]) -> int:
-    return ctx.exec(["python", "manage.py", "createsuperuser", *args],
-                    workdir=WORKDIR, interactive=True)
+    return ctx.exec(
+        ["python", "manage.py", "createsuperuser", *args],
+        workdir=WORKDIR,
+        interactive=True,
+    )
 
 
 def _collectstatic(ctx: PlugContext, args: list[str]) -> int:
@@ -272,6 +274,7 @@ def _test(ctx: PlugContext, args: list[str]) -> int:
 def _startapp(ctx: PlugContext, args: list[str]) -> int:
     if not args:
         from fincli.ui.console import error
+
         error("Usage: fin startapp <name> [path]", title="Invalid Argument")
         return 1
     return ctx.exec(["python", "manage.py", "startapp", *args], workdir=WORKDIR)

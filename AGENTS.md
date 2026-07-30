@@ -113,18 +113,26 @@ re-points `Config.DATA_DIR`/`CONFIG_FILE`/`REGISTRY_DB` at a per-test tmp dir
 and another clears the `DockerService` singleton, so no test can touch a real
 Docker daemon or the developer's `~/.fin`.
 
-CI (`.github/workflows/ci.yml`) runs on every push/PR: the suite across Python
-3.11–3.13 (checking out the public `sharanvelu/fin` repo for `fincli`), a
-`ruff check` lint job, a dedicated **plug contracts** job
-(`tests/test_plug_contracts.py`) enforcing the fincli/stdlib-only import rule,
-the declarative no-Docker rule, and the filename==name identity rule for every
-plug, and a **catalog** job: PRs run `scripts/build_catalog.py --check` (stale
-`catalog.json` fails the build); pushes to `master` regenerate the catalog and
-publish it to GitHub Releases — a new incremental patch version (`1.1.2` →
-`1.1.3`) plus the rolling `latest` release whose asset is always replaced
-(skipped when the catalog is unchanged). Plug files are always served from
-the `master` branch, whatever catalog version is read. Run the contract
-checks locally with `python3 -m pytest tests/test_plug_contracts.py`.
+CI follows the fin repo's **changes → work → gate** architecture — see
+[`.github/CI.md`](.github/CI.md) for the full picture. Per-domain PR
+workflows, each with a path filter and a single required gate check:
+**Tests Gate** (`tests.yml`: pytest across Python 3.11–3.13, the plug
+contracts as their own named job, and a `fin plugs list` smoke run),
+**Code Style Gate** (`code-style.yml`: `ruff check` + `ruff format --check`,
+check-only), **Catalog Gate** (`catalog.yml`:
+`scripts/build_catalog.py --check` — a stale `catalog.json` fails the PR),
+and **Static Analysis Gate** (`static-code-analyze.yml`: actionlint + zizmor
+when `.github/**` changes), plus `pr-title.yml` and `dependency-review.yml`.
+The toolchain (pytest/ruff versions) comes from `sharanvelu/fin`'s dev extra
+via the shared `.github/actions/setup` action — this repo pins no QA tools of
+its own. On pushes to `master`, `catalog-release.yml` regenerates the catalog
+and publishes it to GitHub Releases — a new incremental patch version
+(`1.1.2` → `1.1.3`) plus the rolling `latest` release whose asset is always
+replaced (skipped when the catalog is unchanged). Plug files are always
+served from the `master` branch, whatever catalog version is read. Run the
+contract checks locally with `python3 -m pytest tests/test_plug_contracts.py`
+and the style checks with `ruff check plugs scripts tests` +
+`ruff format --check plugs scripts tests`.
 
 ## Gotchas
 
