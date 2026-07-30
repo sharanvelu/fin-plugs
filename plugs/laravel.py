@@ -10,6 +10,8 @@ inside the running primary container; they never touch Docker directly.
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fincli.core.env import EnvSpec
 from fincli.core.env import EnvVar
 from fincli.plugs.base import ContainerSpec
@@ -17,6 +19,7 @@ from fincli.plugs.base import FinPlug
 from fincli.plugs.base import PlugCommand
 from fincli.plugs.base import PlugType
 from fincli.plugs.base import PortMapping
+from fincli.plugs.base import VolumeMount
 from fincli.plugs.context import PlugContext
 
 #: Where the project directory is mounted inside the container.
@@ -73,6 +76,14 @@ class LaravelPlug(FinPlug):
             web_exposed=True,
             web_port=80,
             workdir_mount=WEBROOT,
+            # Share the host's composer cache/config so installs stay fast
+            # across projects and containers.
+            volumes=[
+                VolumeMount(
+                    host=str(Path.home() / ".composer"),
+                    container="/root/.composer",
+                ),
+            ],
             # Install any CA certs from ~/.fin/certs into the container on `up`.
             # The image is Debian-based, so the ContainerSpec defaults
             # (/usr/local/share/ca-certificates + update-ca-certificates) apply.
