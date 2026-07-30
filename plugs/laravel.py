@@ -3,7 +3,7 @@
 Provides the primary PHP/Laravel container (a public PHP-FPM image bundling
 nginx + php-fpm + supervisord, overridable via ``FIN_DOCKER_IMAGE``) and the
 full set of Laravel developer commands (artisan, composer, tinker, migrate,
-seed, make, queue, bash, phpunit, bin).
+seed, make, queue, bash, phpunit, bin, php).
 
 The plug is declarative: command handlers ask the :class:`PlugContext` to exec
 inside the running primary container; they never touch Docker directly.
