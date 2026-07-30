@@ -119,20 +119,12 @@ jobs:
 
       # Production parity the unit suite can't give: `fin plugs list` walking
       # a real PLUGS_DIR and importing every plug exactly as installed.
-      #
-      # TRANSITIONAL dual placement: released fincli discovers plugs only
-      # under App/Asset/Global type dirs (it ignores files at the PLUGS_DIR
-      # root), while the upcoming flat-layout loader scans ONLY the root.
-      # Copying to both means each fincli generation finds every plug exactly
-      # once. Collapse to the flat copy alone when fin master ships the flat
-      # loader.
       - name: fin plugs list loads every plug
         run: |
           FIN_DATA_DIR="$(mktemp -d)"
           export FIN_DATA_DIR
-          mkdir -p "$FIN_DATA_DIR/plugs/App"
+          mkdir -p "$FIN_DATA_DIR/plugs"
           cp plugs/*.py "$FIN_DATA_DIR/plugs/"
-          cp plugs/*.py "$FIN_DATA_DIR/plugs/App/"
 
           out="$(python -m fincli plugs list)"
           echo "$out"

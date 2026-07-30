@@ -44,10 +44,9 @@ python3 -m pytest                                                  # run the tes
 python3 scripts/build_catalog.py --check                           # catalog matches plugs/
 ```
 
-**Transitional:** the released `fincli` only discovers plugs under the old
-`App/Asset/Global` tree, so the former dev symlink (`ln -s "$PWD"
-~/.fin/plugs`) no longer works — exercise plugs via the test suite until
-fin-v2 ships flat-layout support (then: `ln -s "$PWD/plugs" ~/.fin/plugs`).
+Fin loads plugs at runtime from `~/.fin/plugs` as flat `<name>.py` files —
+exactly this repo's `plugs/` layout — so the dev setup is a single symlink:
+`ln -s "$PWD/plugs" ~/.fin/plugs`.
 
 ## More detail
 

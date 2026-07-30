@@ -86,12 +86,9 @@ served from `master` (`files_base_url`), regardless of catalog version.
 
 ## Development workflow
 
-> **Transitional limitation:** the released `fincli` binary still discovers
-> plugs only under the old `App/`/`Asset/`/`Global/` type directories, so
-> symlinking this repo into `~/.fin/plugs` no longer works. Until fin-v2
-> ships flat-layout support (the dev setup then becomes
-> `ln -s "$PWD/plugs" ~/.fin/plugs`), the plugs here are exercised through
-> the test suite.
+At runtime Fin loads plugs from `PLUGS_DIR` (`~/.fin/plugs`) as flat
+`<name>.py` files — exactly the layout of this repo's `plugs/` directory.
+For development, symlink it there once: `ln -s "$PWD/plugs" ~/.fin/plugs`.
 
 ```bash
 git clone <this-repo> && cd fin-plugs
