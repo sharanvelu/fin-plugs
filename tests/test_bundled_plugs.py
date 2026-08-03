@@ -1,4 +1,4 @@
-"""Tests for the bundled plugs (Laravel/Django apps + MySQL/Redis/Postgres/Minio assets).
+"""Tests for the bundled plugs (Laravel/Django apps + MySQL/Redis/Postgres/Minio/OpenSearch assets).
 
 These load the *real* plugs in this repository, exercising the plug contracts
 (env spec, primary/asset specs, command maps) through the real fincli loader.
@@ -374,6 +374,12 @@ def test_django_oneshot_handlers_not_interactive(name, args):
         ("postgres", "postgres:16-alpine", "fin_postgres"),
         ("redis", "redis:7-alpine", "fin_redis"),
         ("minio", "quay.io/minio/minio", "fin_minio"),
+        ("opensearch", "opensearchproject/opensearch:3", "fin_opensearch"),
+        (
+            "opensearch-dashboards",
+            "opensearchproject/opensearch-dashboards:3",
+            "fin_opensearch_dashboards",
+        ),
     ],
 )
 def test_asset_plugs(tmp_path, plug_name, expected_image, container_name):
@@ -425,6 +431,53 @@ def test_minio_spec(tmp_path):
     assert spec.web_port == 9001
     # Data persists in a host directory mounted at /data.
     assert spec.volumes and spec.volumes[0].container == "/data"
+
+
+def test_opensearch_spec(tmp_path):
+    lp = load_plug("opensearch")
+    spec = lp.instance.asset_specs(_env(tmp_path))[0]
+    # REST API on 9200, Performance Analyzer on 9600, both published.
+    ports = {(p.container, p.host) for p in spec.ports}
+    assert ports == {(9200, 9200), (9600, 9600)}
+    env = spec.environment
+    # Single node — no discovery.seed_hosts (rejected in single-node mode).
+    assert env["discovery.type"] == "single-node"
+    assert "discovery.seed_hosts" not in env
+    # Local-dev setup: security plugin off, no demo config, bounded heap.
+    assert env["DISABLE_SECURITY_PLUGIN"] == "true"
+    assert env["DISABLE_INSTALL_DEMO_CONFIG"] == "true"
+    assert env["OPENSEARCH_JAVA_OPTS"] == "-Xms512m -Xmx512m"
+    # memory_lock requires the memlock ulimit (plain dicts — no docker import).
+    assert env["bootstrap.memory_lock"] == "true"
+    ulimits = {u["name"]: u for u in spec.extra["ulimits"]}
+    assert ulimits["memlock"] == {"name": "memlock", "soft": -1, "hard": -1}
+    assert ulimits["nofile"] == {"name": "nofile", "soft": 65536, "hard": 65536}
+    # Data persists in a named volume.
+    assert spec.volumes and spec.volumes[0].container == "/usr/share/opensearch/data"
+    # The API is not a web UI — not Traefik-routed.
+    assert spec.web_exposed is False
+
+
+def test_opensearch_dashboards_spec(tmp_path):
+    lp = load_plug("opensearch-dashboards")
+    spec = lp.instance.asset_specs(_env(tmp_path))[0]
+    ports = {(p.container, p.host) for p in spec.ports}
+    assert ports == {(5601, 5601)}
+    # Web UI routed by Traefik (web-exposed asset).
+    assert spec.web_exposed is True
+    assert spec.web_port == 5601
+    env = spec.environment
+    # Talks to the shared cluster from the opensearch plug, security off on
+    # both sides — no credentials.
+    assert env["OPENSEARCH_HOSTS"] == '["http://fin_opensearch:9200"]'
+    assert env["DISABLE_SECURITY_DASHBOARDS_PLUGIN"] == "true"
+    assert "OPENSEARCH_USERNAME" not in env
+    assert "OPENSEARCH_PASSWORD" not in env
+    # Enhanced Discover experience: whitelisted settings via env vars,
+    # explore.enabled (not whitelisted) as a CLI override.
+    assert env["DATA_SOURCE_ENABLED"] == "true"
+    assert env["WORKSPACE_ENABLED"] == "true"
+    assert spec.command == ["--explore.enabled=true"]
 
 
 def test_minio_uses_config_credentials(tmp_path, monkeypatch):

@@ -60,6 +60,22 @@
       "file": "plugs/mysql.py"
     },
     {
+      "name": "opensearch-dashboards",
+      "type": "ASSET",
+      "version": "1.0.0",
+      "description": "Shared OpenSearch Dashboards web UI container (requires the opensearch asset).",
+      "commands": [],
+      "file": "plugs/opensearch-dashboards.py"
+    },
+    {
+      "name": "opensearch",
+      "type": "ASSET",
+      "version": "1.0.0",
+      "description": "Shared OpenSearch search/analytics container (single node).",
+      "commands": [],
+      "file": "plugs/opensearch.py"
+    },
+    {
       "name": "postgres",
       "type": "ASSET",
       "version": "1.0.0",
